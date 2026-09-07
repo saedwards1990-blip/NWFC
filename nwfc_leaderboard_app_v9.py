@@ -12,6 +12,7 @@ import requests
 
 # Helper to convert standard Google Sheet URL to direct, real-time export CSV URL (bypassing 5-minute cache delay)
 def convert_to_export_url(url):
+    import time
     if not url:
         return ""
     url = url.strip()
@@ -20,8 +21,13 @@ def convert_to_export_url(url):
         url = url[1:-1]
     if url.startswith("'") and url.endswith("'"):
         url = url[1:-1]
+        
+    cache_buster = int(time.time() * 1000)
+    
     if "export?format=csv" in url or "/pub?" in url:
-        return url
+        sep = "&" if "?" in url else "?"
+        return f"{url}{sep}t={cache_buster}"
+        
     if "docs.google.com/spreadsheets/d/" in url:
         parts = url.split("docs.google.com/spreadsheets/d/")
         if len(parts) > 1:
@@ -32,7 +38,7 @@ def convert_to_export_url(url):
                 gid_part = url.split("gid=")
                 if len(gid_part) > 1:
                     gid = gid_part[1].split("&")[0].split("#")[0].split("?")[0]
-            return f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/export?format=csv&gid={gid}"
+            return f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/export?format=csv&gid={gid}&t={cache_buster}"
     return url
 
 st.set_page_collab_width = True
@@ -146,16 +152,15 @@ def format_time(sec):
         val = float(sec)
         mins = int(val // 60)
         secs = val % 60
-        return f"{mins:02d}:{secs:05.2f}"
+        return f"{mins:02d}:{secs:06.3f}"
     except:
-        return "00:00.00"
+        return "00:00.000"
 
 # Robust CSV Reader Utility to prevent tokenizing errors (e.g. from commas in fields or trailing grid cells)
 def get_gsheet_data_robust(url):
     try:
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req) as r:
-            raw_data = r.read().decode('utf-8')
+        response = requests.get(url, headers={'User-Agent': 'Mozilla/5.0', 'Cache-Control': 'no-cache', 'Pragma': 'no-cache'}, timeout=10)
+        raw_data = response.text
         
         f = io.StringIO(raw_data)
         reader = csv.reader(f)
@@ -231,7 +236,8 @@ def write_individual_run(name, station, watch, category, age_group, raw_time, pe
                 "age_group": age_group,
                 "raw_time_sec": str(raw_time),
                 "penalties_sec": str(penalties),
-                "final_time_sec": str(final_time)
+                "final_time_sec": str(final_time),
+                "formatted_time": format_time(final_time)
             }
             # requests is much more robust at handling Google Apps Script 302 redirects than urllib!
             response = requests.post(APPS_SCRIPT_URL, data=payload, timeout=10)
@@ -270,7 +276,8 @@ def write_relay_run(station, watch, division, r1, r2, r3, r4, raw_time, penaltie
                 "runner_4": r4,
                 "raw_time_sec": str(raw_time),
                 "penalties_sec": str(penalties),
-                "final_time_sec": str(final_time)
+                "final_time_sec": str(final_time),
+                "formatted_time": format_time(final_time)
             }
             response = requests.post(APPS_SCRIPT_URL, data=payload, timeout=10)
             res_text = response.text
