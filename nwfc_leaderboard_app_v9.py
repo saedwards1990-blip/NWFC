@@ -4,6 +4,8 @@ import sqlite3
 import os
 import urllib.request
 import urllib.parse
+import csv
+import io
 import json
 
 st.set_page_collab_width = True
@@ -121,13 +123,45 @@ def format_time(sec):
     except:
         return "00:00.00"
 
+# Robust CSV Reader Utility to prevent tokenizing errors (e.g. from commas in fields or trailing grid cells)
+def get_gsheet_data_robust(url):
+    try:
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req) as r:
+            raw_data = r.read().decode('utf-8')
+        
+        f = io.StringIO(raw_data)
+        reader = csv.reader(f)
+        try:
+            header = next(reader)
+        except StopIteration:
+            return pd.DataFrame()
+            
+        header = [h.strip() for h in header]
+        
+        rows = []
+        for row in reader:
+            # Handle extra or missing columns in lines gracefully without throwing tokenizer errors
+            if len(row) > len(header):
+                row = row[:len(header)]
+            elif len(row) < len(header):
+                row += [''] * (len(header) - len(row))
+            rows.append(row)
+            
+        df = pd.DataFrame(rows, columns=header)
+        return df
+    except Exception as e:
+        raise RuntimeError(f"CSV Parsing Failed: {e}")
+
 # Data Access Layer
 def get_individuals_data():
     if GSHEET_INDIVIDUALS_CSV:
         try:
-            df = pd.read_csv(GSHEET_INDIVIDUALS_CSV)
-            df['final_time_sec'] = pd.to_numeric(df['final_time_sec'])
-            return df
+            df = get_gsheet_data_robust(GSHEET_INDIVIDUALS_CSV)
+            if not df.empty and 'final_time_sec' in df.columns:
+                df['final_time_sec'] = pd.to_numeric(df['final_time_sec'], errors='coerce')
+                df = df.dropna(subset=['final_time_sec'])
+                return df
         except Exception as e:
             st.error(f"Error reading Individuals from Google Sheets: {e}. Falling back to local data.")
     
@@ -139,9 +173,11 @@ def get_individuals_data():
 def get_relays_data():
     if GSHEET_RELAYS_CSV:
         try:
-            df = pd.read_csv(GSHEET_RELAYS_CSV)
-            df['final_time_sec'] = pd.to_numeric(df['final_time_sec'])
-            return df
+            df = get_gsheet_data_robust(GSHEET_RELAYS_CSV)
+            if not df.empty and 'final_time_sec' in df.columns:
+                df['final_time_sec'] = pd.to_numeric(df['final_time_sec'], errors='coerce')
+                df = df.dropna(subset=['final_time_sec'])
+                return df
         except Exception as e:
             st.error(f"Error reading Relays from Google Sheets: {e}. Falling back to local data.")
             
