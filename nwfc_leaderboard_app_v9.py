@@ -485,14 +485,16 @@ with tab_admin:
             st.session_state.admin_mode = "individual"
             
         st.write("##### 🎛️ Select Form Type:")
-        # Highly prominent side-by-side layout selector buttons
-        col_btn_l, col_btn_r = st.columns(2)
+        # Separated on either side of the page with a clear gap in between
+        col_btn_l, col_spacer, col_btn_r = st.columns([3, 1, 3])
         with col_btn_l:
-            if st.button("🏃 INDIVIDUAL COMPETITOR", use_container_width=True, type="primary" if st.session_state.admin_mode == "individual" else "secondary"):
+            st.markdown("<p style='text-align: center; font-size: 24px; margin-bottom: 0px;'>🏃</p>", unsafe_allow_html=True)
+            if st.button("LOG INDIVIDUAL COMPETITOR TIME", use_container_width=True, type="primary" if st.session_state.admin_mode == "individual" else "secondary"):
                 st.session_state.admin_mode = "individual"
                 st.rerun()
         with col_btn_r:
-            if st.button("👥 RELAY TEAM", use_container_width=True, type="primary" if st.session_state.admin_mode == "relay" else "secondary"):
+            st.markdown("<p style='text-align: center; font-size: 24px; margin-bottom: 0px;'>👥</p>", unsafe_allow_html=True)
+            if st.button("LOG RELAY CHAMPIONSHIP TEAM TIME", use_container_width=True, type="primary" if st.session_state.admin_mode == "relay" else "secondary"):
                 st.session_state.admin_mode = "relay"
                 st.rerun()
                 
@@ -524,9 +526,14 @@ with tab_admin:
                 submit = st.form_submit_button("Log Run and Sync Leaderboard")
                 
                 if submit:
-                    raw_tot = mins * 60 + secs
-                    final_tot = raw_tot + penalties
-                    write_individual_run(name, station, watch, category, age_group, raw_tot, penalties, final_tot)
+                    if not name.strip():
+                        st.error("⚠️ Submission Blocked: Competitor Name is required. Please fill in the competitor's name to complete the entry.")
+                    elif mins == 0 and secs == 0.0:
+                        st.error("⚠️ Submission Blocked: Raw Stopwatch Time cannot be 00:00.000. Please enter the raw run time.")
+                    else:
+                        raw_tot = mins * 60 + secs
+                        final_tot = raw_tot + penalties
+                        write_individual_run(name, station, watch, category, age_group, raw_tot, penalties, final_tot)
                     
         else:
             st.markdown("#### 👥 Relay Team Entry Form")
@@ -546,15 +553,40 @@ with tab_admin:
                 
                 st.markdown("##### ⚠️ Rule Violations & Penalties")
                 penalties = 0
-                if st.checkbox("Relay Touch-Tag missed or out of zone (+10s)"): penalties += 10
-                if st.checkbox("Dummy drag boundary lane crossing (+15s)"): penalties += 15
+                if st.checkbox("Dropped Cleveland Hose Pack (+10s)", key="rel_p1"): penalties += 10
+                if st.checkbox("Improper RTC Tool Table Placement (+5s per tool)", key="rel_p2"): penalties += 5
+                if st.checkbox("Improper Forcible Entry Sledge Technique (+10s)", key="rel_p3"): penalties += 10
+                if st.checkbox("Missed 50m Hose Drag Marker (+15s)", key="rel_p4"): penalties += 15
+                if st.checkbox("Hose Makeup Box Overflow Boundary (+10s)", key="rel_p5"): penalties += 10
+                if st.checkbox("Foam Containers Slid or Thrown (+10s)", key="rel_p6"): penalties += 10
+                if st.checkbox("Dummy Head / Face Drag Warning (+15s)", key="rel_p7"): penalties += 15
+                if st.checkbox("Relay Touch-Tag missed or out of zone (+10s)", key="rel_p8"): penalties += 10
+                if st.checkbox("Dummy drag boundary lane crossing (+15s)", key="rel_p9"): penalties += 15
                 
                 submit = st.form_submit_button("Log Relay Team and Sync Leaderboard")
                 
                 if submit:
-                    raw_tot = mins * 60 + secs
-                    final_tot = raw_tot + penalties
-                    write_relay_run(relay_team_name, division, r1, r2, r3, r4, raw_tot, penalties, final_tot)
+                    # Strict validation block to prevent "Enter-to-submit" empty entries
+                    missing_fields = []
+                    if not relay_team_name.strip():
+                        missing_fields.append("Relay Team Name")
+                    if not r1.strip():
+                        missing_fields.append("Runner 1 (Shuttle & RTC)")
+                    if not r2.strip():
+                        missing_fields.append("Runner 2 (Force & Drag)")
+                    if not r3.strip():
+                        missing_fields.append("Runner 3 (Makeup & Foam)")
+                    if not r4.strip():
+                        missing_fields.append("Runner 4 (Dummy Rescue)")
+                    
+                    if missing_fields:
+                        st.error(f"⚠️ Submission Blocked: Incomplete Entry! Please fill in all required fields: {', '.join(missing_fields)}.")
+                    elif mins == 0 and secs == 0.0:
+                        st.error("⚠️ Submission Blocked: Raw Relay Stopwatch Time cannot be 00:00.000. Please enter the raw run time.")
+                    else:
+                        raw_tot = mins * 60 + secs
+                        final_tot = raw_tot + penalties
+                        write_relay_run(relay_team_name, division, r1, r2, r3, r4, raw_tot, penalties, final_tot)
 
     else:
         st.info("Enter password 'nwfc2026' in the field above to activate the marshal logger panel.")
