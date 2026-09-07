@@ -9,10 +9,8 @@ import io
 import json
 import requests
 
-
 # Helper to convert standard Google Sheet URL to direct, real-time export CSV URL (bypassing 5-minute cache delay)
 def convert_to_export_url(url):
-    import time
     if not url:
         return ""
     url = url.strip()
@@ -21,13 +19,8 @@ def convert_to_export_url(url):
         url = url[1:-1]
     if url.startswith("'") and url.endswith("'"):
         url = url[1:-1]
-        
-    cache_buster = int(time.time() * 1000)
-    
     if "export?format=csv" in url or "/pub?" in url:
-        sep = "&" if "?" in url else "?"
-        return f"{url}{sep}t={cache_buster}"
-        
+        return url
     if "docs.google.com/spreadsheets/d/" in url:
         parts = url.split("docs.google.com/spreadsheets/d/")
         if len(parts) > 1:
@@ -38,7 +31,7 @@ def convert_to_export_url(url):
                 gid_part = url.split("gid=")
                 if len(gid_part) > 1:
                     gid = gid_part[1].split("&")[0].split("#")[0].split("?")[0]
-            return f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/export?format=csv&gid={gid}&t={cache_buster}"
+            return f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/export?format=csv&gid={gid}"
     return url
 
 st.set_page_collab_width = True
@@ -72,7 +65,27 @@ APPS_SCRIPT_URL = st.sidebar.text_input(
     help="Paste the deployed Google Apps Script Web App URL to enable writing directly to your Google Sheet."
 )
 
-DB_PATH = "nwfc_tournament_v7.db"
+DB_PATH = "nwfc_tournament_v8.db"
+
+# Master NWFRS stations list (all 44 stations + HQ and St Asaph)
+STATIONS_LIST = [
+    "Aberdyfi", "Abergele", "Abersoch", "Amlwch", "Bala", "Bangor", 
+    "Barmouth", "Beaumaris", "Benllech", "Betws-y-Coed", "Blaenau Ffestiniog", 
+    "Buckley", "Caernarfon", "Cemaes Bay", "Cerrigydrudion", "Chirk", 
+    "Colwyn Bay", "Conwy", "Corwen", "Criccieth", "Deeside", "Denbigh", 
+    "Dolgellau", "Flint", "Harlech", "Holyhead", "Johnstown", "Llanberis", 
+    "Llandudno", "Llanfairfechan", "Llangefni", "Llangollen", "Llanrwst", 
+    "Menai Bridge", "Mold", "Nefyn", "Penygroes", "Porthmadog", "Prestatyn", 
+    "Pwllheli", "Rhyl", "Ruthin", "St Asaph", "Tywyn", "Wrexham", "HQ"
+]
+
+# Master watch and departments list (including newly requested sectors and watches)
+WATCHES_LIST = [
+    "Red", "Green", "Blue", "White", "Nucleus", "RDS", "Rural",
+    "Transformation", "Officers", "Training", "Prevention", "HR", "Fleet", 
+    "Corporate Comms", "Technical Ops", "Facilities", "ICT", "Finance", 
+    "Response", "Control", "Other"
+]
 
 # Local SQLite fallback initialisation
 def init_local_db():
@@ -94,9 +107,9 @@ def init_local_db():
     c.execute('''
         CREATE TABLE IF NOT EXISTS relays (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            station TEXT NOT NULL,
-            watch TEXT NOT NULL,
-            division TEXT NOT NULL,
+            station TEXT NOT NULL, -- Will store 'Relay Team Name'
+            watch TEXT NOT NULL, -- Stores 'N/A'
+            division TEXT NOT NULL, -- 'Male', 'Female', 'Mixed'
             runner_1 TEXT NOT NULL,
             runner_2 TEXT NOT NULL,
             runner_3 TEXT NOT NULL,
@@ -131,10 +144,10 @@ def init_local_db():
     c.execute("SELECT COUNT(*) FROM relays")
     if c.fetchone()[0] == 0:
         mock_rel = [
-            ("Wrexham", "Red", "Male Watch", "Runner A", "Runner B", "Runner C", "Runner D", 195.5, 10, 205.5),
-            ("Rhyl", "Green", "Male Watch", "Runner A", "Runner B", "Runner C", "Runner D", 201.0, 0, 201.0),
-            ("Deeside", "Blue", "Mixed Watch", "Runner A", "Runner B", "Runner C", "Runner D", 215.5, 5, 220.5),
-            ("Bangor", "Red", "Female Watch", "Runner A", "Runner B", "Runner C", "Runner D", 232.0, 0, 232.0),
+            ("Wrexham Red", "N/A", "Male", "Runner A", "Runner B", "Runner C", "Runner D", 195.5, 10, 205.5),
+            ("Rhyl Green", "N/A", "Male", "Runner A", "Runner B", "Runner C", "Runner D", 201.0, 0, 201.0),
+            ("Deeside Blue", "N/A", "Mixed", "Runner A", "Runner B", "Runner C", "Runner D", 215.5, 5, 220.5),
+            ("Bangor Red", "N/A", "Female", "Runner A", "Runner B", "Runner C", "Runner D", 232.0, 0, 232.0),
         ]
         c.executemany("INSERT INTO relays (station, watch, division, runner_1, runner_2, runner_3, runner_4, raw_time_sec, penalties_sec, final_time_sec) VALUES (?,?,?,?,?,?,?,?,?,?)", mock_rel)
     conn.commit()
@@ -152,15 +165,23 @@ def format_time(sec):
         val = float(sec)
         mins = int(val // 60)
         secs = val % 60
+        # High precision format to support milliseconds (3 decimal places)
         return f"{mins:02d}:{secs:06.3f}"
     except:
         return "00:00.000"
 
-# Robust CSV Reader Utility to prevent tokenizing errors (e.g. from commas in fields or trailing grid cells)
+# Robust CSV Reader Utility to prevent tokenising errors (e.g. from commas in fields or trailing grid cells)
 def get_gsheet_data_robust(url):
     try:
-        response = requests.get(url, headers={'User-Agent': 'Mozilla/5.0', 'Cache-Control': 'no-cache', 'Pragma': 'no-cache'}, timeout=10)
-        raw_data = response.text
+        # Cache buster to ensure standard Google Sheet viewer URLs fetch 100% live data with 0 sync lag
+        if "?" in url:
+            cache_url = f"{url}&cb={os.urandom(4).hex()}"
+        else:
+            cache_url = f"{url}?cb={os.urandom(4).hex()}"
+            
+        req = urllib.request.Request(cache_url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req) as r:
+            raw_data = r.read().decode('utf-8')
         
         f = io.StringIO(raw_data)
         reader = csv.reader(f)
@@ -196,7 +217,7 @@ def get_individuals_data():
                 df = df.dropna(subset=['final_time_sec'])
                 return df
             elif df.empty:
-                return pd.DataFrame(columns=['id', 'name', 'station', 'watch', 'category', 'age_group', 'raw_time_sec', 'penalties_sec', 'final_time_sec'])
+                return pd.DataFrame(columns=['id', 'name', 'station', 'watch', 'category', 'age_group', 'raw_time_sec', 'penalties_sec', 'final_time_sec', 'formatted_time'])
         except Exception as e:
             st.error(f"Error reading Individuals from Google Sheets: {e}. Falling back to local data.")
     
@@ -215,7 +236,7 @@ def get_relays_data():
                 df = df.dropna(subset=['final_time_sec'])
                 return df
             elif df.empty:
-                return pd.DataFrame(columns=['id', 'station', 'watch', 'division', 'runner_1', 'runner_2', 'runner_3', 'runner_4', 'raw_time_sec', 'penalties_sec', 'final_time_sec'])
+                return pd.DataFrame(columns=['id', 'station', 'watch', 'division', 'runner_1', 'runner_2', 'runner_3', 'runner_4', 'raw_time_sec', 'penalties_sec', 'final_time_sec', 'formatted_time'])
         except Exception as e:
             st.error(f"Error reading Relays from Google Sheets: {e}. Falling back to local data.")
             
@@ -225,6 +246,7 @@ def get_relays_data():
     return df
 
 def write_individual_run(name, station, watch, category, age_group, raw_time, penalties, final_time):
+    formatted_t = format_time(final_time)
     if APPS_SCRIPT_URL:
         try:
             payload = {
@@ -237,9 +259,8 @@ def write_individual_run(name, station, watch, category, age_group, raw_time, pe
                 "raw_time_sec": str(raw_time),
                 "penalties_sec": str(penalties),
                 "final_time_sec": str(final_time),
-                "formatted_time": format_time(final_time)
+                "formatted_time": formatted_t
             }
-            # requests is much more robust at handling Google Apps Script 302 redirects than urllib!
             response = requests.post(APPS_SCRIPT_URL, data=payload, timeout=10)
             res_text = response.text
             if "SUCCESS" in res_text:
@@ -259,17 +280,18 @@ def write_individual_run(name, station, watch, category, age_group, raw_time, pe
     )
     conn.commit()
     conn.close()
-    st.success(f"Logged {name}'s run locally: {format_time(final_time)}")
+    st.success(f"Logged {name}'s run locally: {formatted_t}")
     return True
 
-def write_relay_run(station, watch, division, r1, r2, r3, r4, raw_time, penalties, final_time):
+def write_relay_run(team_name, division, r1, r2, r3, r4, raw_time, penalties, final_time):
+    formatted_t = format_time(final_time)
     if APPS_SCRIPT_URL:
         try:
             payload = {
                 "action": "add_relay",
-                "station": station,
-                "watch": watch,
-                "division": division,
+                "station": team_name, # Map team_name directly to the existing station column
+                "watch": "N/A", # Pass N/A for watches
+                "division": division, # 'Male', 'Female', 'Mixed'
                 "runner_1": r1,
                 "runner_2": r2,
                 "runner_3": r3,
@@ -277,12 +299,12 @@ def write_relay_run(station, watch, division, r1, r2, r3, r4, raw_time, penaltie
                 "raw_time_sec": str(raw_time),
                 "penalties_sec": str(penalties),
                 "final_time_sec": str(final_time),
-                "formatted_time": format_time(final_time)
+                "formatted_time": formatted_t
             }
             response = requests.post(APPS_SCRIPT_URL, data=payload, timeout=10)
             res_text = response.text
             if "SUCCESS" in res_text:
-                st.success(f"Successfully saved and synced {station} Relay run to Google Sheets Cloud!")
+                st.success(f"Successfully saved and synced {team_name} Relay run to Google Sheets Cloud!")
                 return True
             else:
                 st.error(f"Apps Script Error: {res_text}")
@@ -294,11 +316,11 @@ def write_relay_run(station, watch, division, r1, r2, r3, r4, raw_time, penaltie
     c = conn.cursor()
     c.execute(
         "INSERT INTO relays (station, watch, division, runner_1, runner_2, runner_3, runner_4, raw_time_sec, penalties_sec, final_time_sec) VALUES (?,?,?,?,?,?,?,?,?,?)",
-        (station, watch, division, r1, r2, r3, r4, raw_time, penalties, final_time)
+        (team_name, "N/A", division, r1, r2, r3, r4, raw_time, penalties, final_time)
     )
     conn.commit()
     conn.close()
-    st.success(f"Logged {station} Relay run locally: {format_time(final_time)}")
+    st.success(f"Logged {team_name} Relay run locally: {formatted_t}")
     return True
 
 
@@ -366,7 +388,7 @@ with tab_leaderboard:
     with col_rel:
         st.markdown("#### 👥 Inter-Watch Relays")
         division_filter = st.selectbox("Filter Relay Class:", [
-            "All Relay Teams", "Male Watch Division", "Female Watch Division", "Mixed Watch Division"
+            "All Relay Teams", "Male", "Female", "Mixed"
         ])
         
         df_rel = get_relays_data()
@@ -375,14 +397,19 @@ with tab_leaderboard:
             if division_filter == "All Relay Teams":
                 df_filtered_rel = df_rel.copy()
             else:
-                div_val = division_filter.replace(" Division", "")
-                df_filtered_rel = df_rel[df_rel['division'] == div_val].copy()
+                df_filtered_rel = df_rel[df_rel['division'] == division_filter].copy()
                 
             if not df_filtered_rel.empty:
                 df_filtered_rel = df_filtered_rel.sort_values(by="final_time_sec", ascending=True)
                 df_filtered_rel["Time"] = df_filtered_rel["final_time_sec"].apply(format_time)
                 df_filtered_rel.index = range(1, len(df_filtered_rel) + 1)
-                st.dataframe(df_filtered_rel[["station", "watch", "division", "runner_1", "runner_2", "runner_3", "runner_4", "Time"]], use_container_width=True)
+                
+                # Professional display formatting: show Relay Team Name explicitly
+                df_display = df_filtered_rel.rename(columns={"station": "Relay Team Name"}).copy()
+                cols_to_show = ["Relay Team Name", "division", "runner_1", "runner_2", "runner_3", "runner_4", "Time"]
+                cols_to_show = [c for c in cols_to_show if c in df_display.columns]
+                
+                st.dataframe(df_display[cols_to_show], use_container_width=True)
             else:
                 st.info("No relay times recorded in this filtered category yet.")
         else:
@@ -453,19 +480,36 @@ with tab_admin:
     if password == "nwfc2026":
         st.success("Access Granted. Marshal Timing Form Active.")
         
-        mode = st.radio("Log Time For:", ["Individual Competitor", "Watch Relay Team"])
+        # Initialise session state to track the active form if not present
+        if 'admin_mode' not in st.session_state:
+            st.session_state.admin_mode = "individual"
+            
+        st.write("##### 🎛️ Select Form Type:")
+        # Highly prominent side-by-side layout selector buttons
+        col_btn_l, col_btn_r = st.columns(2)
+        with col_btn_l:
+            if st.button("🏃 INDIVIDUAL COMPETITOR", use_container_width=True, type="primary" if st.session_state.admin_mode == "individual" else "secondary"):
+                st.session_state.admin_mode = "individual"
+                st.rerun()
+        with col_btn_r:
+            if st.button("👥 RELAY TEAM", use_container_width=True, type="primary" if st.session_state.admin_mode == "relay" else "secondary"):
+                st.session_state.admin_mode = "relay"
+                st.rerun()
+                
+        st.markdown("---")
         
-        if mode == "Individual Competitor":
+        if st.session_state.admin_mode == "individual":
+            st.markdown("#### 🏃 Individual Competitor Entry Form")
             with st.form("ind_form"):
                 name = st.text_input("Competitor Name:")
-                station = st.selectbox("Station:", ["Wrexham", "Rhyl", "Deeside", "Bangor", "Holyhead", "Colwyn Bay", "Llandudno", "St Asaph", "HQ"])
-                watch = st.selectbox("Watch / Dept:", ["Red", "Green", "Blue", "Corporate", "Control", "Other"])
+                station = st.selectbox("Station:", STATIONS_LIST)
+                watch = st.selectbox("Watch / Dept / Sector:", WATCHES_LIST)
                 category = st.selectbox("Class Category:", ["Operational Male", "Operational Female", "Support Staff"])
                 age_group = st.selectbox("Age Bracket:", ['18-29', '30-34', '35-39', '40-44', '45-49', '50-54', '55+'])
                 
                 st.markdown("##### ⏱️ Raw Stopwatch Time")
                 mins = st.number_input("Minutes:", min_value=0, max_value=10, value=1)
-                secs = st.number_input("Seconds (and ms):", min_value=0.0, max_value=59.99, value=30.0)
+                secs = st.number_input("Seconds (and ms):", min_value=0.0, max_value=59.999, value=30.0, step=0.001, format="%.3f")
                 
                 st.markdown("##### ⚠️ Rule Violations & Penalties")
                 penalties = 0
@@ -485,19 +529,22 @@ with tab_admin:
                     write_individual_run(name, station, watch, category, age_group, raw_tot, penalties, final_tot)
                     
         else:
+            st.markdown("#### 👥 Relay Team Entry Form")
             with st.form("relay_form"):
-                station = st.selectbox("Relay Station:", ["Wrexham", "Rhyl", "Deeside", "Bangor", "Holyhead", "Colwyn Bay", "Llandudno"])
-                watch = st.selectbox("Relay Watch:", ["Red", "Green", "Blue"])
-                division = st.selectbox("Watch Relay Division:", ["Male Watch", "Female Watch", "Mixed Watch"])
+                relay_team_name = st.text_input("Relay Team Name:")
+                division = st.selectbox("Relay Division:", ["Male", "Female", "Mixed"])
                 
+                st.markdown("##### 🏃 Running Order (4-Person Team)")
                 r1 = st.text_input("Runner 1 (Shuttle & RTC):")
                 r2 = st.text_input("Runner 2 (Force & Drag):")
                 r3 = st.text_input("Runner 3 (Makeup & Foam):")
                 r4 = st.text_input("Runner 4 (Dummy Rescue):")
                 
+                st.markdown("##### ⏱️ Raw Relay Stopwatch Time")
                 mins = st.number_input("Relay Minutes:", min_value=1, max_value=10, value=3)
-                secs = st.number_input("Relay Seconds:", min_value=0.0, max_value=59.99, value=15.0)
+                secs = st.number_input("Relay Seconds (and ms):", min_value=0.0, max_value=59.999, value=15.0, step=0.001, format="%.3f")
                 
+                st.markdown("##### ⚠️ Rule Violations & Penalties")
                 penalties = 0
                 if st.checkbox("Relay Touch-Tag missed or out of zone (+10s)"): penalties += 10
                 if st.checkbox("Dummy drag boundary lane crossing (+15s)"): penalties += 15
@@ -507,7 +554,7 @@ with tab_admin:
                 if submit:
                     raw_tot = mins * 60 + secs
                     final_tot = raw_tot + penalties
-                    write_relay_run(station, watch, division, r1, r2, r3, r4, raw_tot, penalties, final_tot)
+                    write_relay_run(relay_team_name, division, r1, r2, r3, r4, raw_tot, penalties, final_tot)
 
     else:
         st.info("Enter password 'nwfc2026' in the field above to activate the marshal logger panel.")
@@ -519,11 +566,11 @@ with tab_admin:
             "To enable zero-stress cloud storage so you do not lose data over the month-long tournament, follow these simple steps:"
         )
         st.markdown("""
-        1. **Create and Share your Google Sheet (No Technical \"Publish to Web\" Needed!):**
+        1. **Create and Share your Google Sheet (No Technical "Publish to Web" Needed!):**
            * Create a standard Google Sheet with two tabs: `individuals` and `relays`.
-           * Create the header row in `individuals`: `id`, `name`, `station`, `watch`, `category`, `age_group`, `raw_time_sec`, `penalties_sec`, `final_time_sec`.
-           * Create the header row in `relays`: `id`, `station`, `watch`, `division`, `runner_1`, `runner_2`, `runner_3`, `runner_4`, `raw_time_sec`, `penalties_sec`, `final_time_sec`.
-           * Click the blue **Share** button in the top-right corner of Google Sheets. Under **General access**, change it from \"Restricted\" to **Anyone with the link can view** (this allows the app to read your live data).
+           * Create the header row in `individuals`: `id`, `name`, `station`, `watch`, `category`, `age_group`, `raw_time_sec`, `penalties_sec`, `final_time_sec`, `formatted_time`.
+           * Create the header row in `relays`: `id`, `station`, `watch`, `division`, `runner_1`, `runner_2`, `runner_3`, `runner_4`, `raw_time_sec`, `penalties_sec`, `final_time_sec`, `formatted_time`.
+           * Click the blue **Share** button in the top-right corner of Google Sheets. Under **General access**, change it from "Restricted" to **Anyone with the link can view** (this allows the app to read your live data).
            * Simply copy the **standard URL from your Chrome address bar** for each tab! 
              * For the `individuals` tab, copy the link and paste it directly into **Google Sheet Individuals CSV URL** in the sidebar.
              * For the `relays` tab, copy the link and paste it directly into **Google Sheet Relays CSV URL** in the sidebar.
