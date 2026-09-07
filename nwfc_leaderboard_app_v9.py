@@ -7,6 +7,33 @@ import urllib.parse
 import csv
 import io
 import json
+import requests
+
+
+# Helper to convert standard Google Sheet URL to direct, real-time export CSV URL (bypassing 5-minute cache delay)
+def convert_to_export_url(url):
+    if not url:
+        return ""
+    url = url.strip()
+    # Remove any surrounding quotes
+    if url.startswith('"') and url.endswith('"'):
+        url = url[1:-1]
+    if url.startswith("'") and url.endswith("'"):
+        url = url[1:-1]
+    if "export?format=csv" in url or "/pub?" in url:
+        return url
+    if "docs.google.com/spreadsheets/d/" in url:
+        parts = url.split("docs.google.com/spreadsheets/d/")
+        if len(parts) > 1:
+            subparts = parts[1].split("/")
+            spreadsheet_id = subparts[0]
+            gid = "0"
+            if "gid=" in url:
+                gid_part = url.split("gid=")
+                if len(gid_part) > 1:
+                    gid = gid_part[1].split("&")[0].split("#")[0].split("?")[0]
+            return f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/export?format=csv&gid={gid}"
+    return url
 
 st.set_page_collab_width = True
 st.set_page_config(
@@ -157,11 +184,14 @@ def get_gsheet_data_robust(url):
 def get_individuals_data():
     if GSHEET_INDIVIDUALS_CSV:
         try:
-            df = get_gsheet_data_robust(GSHEET_INDIVIDUALS_CSV)
-            if not df.empty and 'final_time_sec' in df.columns:
+            real_url = convert_to_export_url(GSHEET_INDIVIDUALS_CSV)
+            df = get_gsheet_data_robust(real_url)
+            if 'final_time_sec' in df.columns:
                 df['final_time_sec'] = pd.to_numeric(df['final_time_sec'], errors='coerce')
                 df = df.dropna(subset=['final_time_sec'])
                 return df
+            elif df.empty:
+                return pd.DataFrame(columns=['id', 'name', 'station', 'watch', 'category', 'age_group', 'raw_time_sec', 'penalties_sec', 'final_time_sec'])
         except Exception as e:
             st.error(f"Error reading Individuals from Google Sheets: {e}. Falling back to local data.")
     
@@ -173,11 +203,14 @@ def get_individuals_data():
 def get_relays_data():
     if GSHEET_RELAYS_CSV:
         try:
-            df = get_gsheet_data_robust(GSHEET_RELAYS_CSV)
-            if not df.empty and 'final_time_sec' in df.columns:
+            real_url = convert_to_export_url(GSHEET_RELAYS_CSV)
+            df = get_gsheet_data_robust(real_url)
+            if 'final_time_sec' in df.columns:
                 df['final_time_sec'] = pd.to_numeric(df['final_time_sec'], errors='coerce')
                 df = df.dropna(subset=['final_time_sec'])
                 return df
+            elif df.empty:
+                return pd.DataFrame(columns=['id', 'station', 'watch', 'division', 'runner_1', 'runner_2', 'runner_3', 'runner_4', 'raw_time_sec', 'penalties_sec', 'final_time_sec'])
         except Exception as e:
             st.error(f"Error reading Relays from Google Sheets: {e}. Falling back to local data.")
             
@@ -200,15 +233,14 @@ def write_individual_run(name, station, watch, category, age_group, raw_time, pe
                 "penalties_sec": str(penalties),
                 "final_time_sec": str(final_time)
             }
-            data = urllib.parse.urlencode(payload).encode('utf-8')
-            req = urllib.request.Request(APPS_SCRIPT_URL, data=data, method="POST")
-            with urllib.request.urlopen(req) as response:
-                res_text = response.read().decode('utf-8')
-                if "SUCCESS" in res_text:
-                    st.success(f"Successfully saved and synced {name}'s run to Google Sheets Cloud!")
-                    return True
-                else:
-                    st.error(f"Apps Script Error: {res_text}")
+            # requests is much more robust at handling Google Apps Script 302 redirects than urllib!
+            response = requests.post(APPS_SCRIPT_URL, data=payload, timeout=10)
+            res_text = response.text
+            if "SUCCESS" in res_text:
+                st.success(f"Successfully saved and synced {name}'s run to Google Sheets Cloud!")
+                return True
+            else:
+                st.error(f"Apps Script Error: {res_text}")
         except Exception as e:
             st.error(f"Failed to write to Google Sheets: {e}. Attempting local database write...")
             
@@ -240,15 +272,13 @@ def write_relay_run(station, watch, division, r1, r2, r3, r4, raw_time, penaltie
                 "penalties_sec": str(penalties),
                 "final_time_sec": str(final_time)
             }
-            data = urllib.parse.urlencode(payload).encode('utf-8')
-            req = urllib.request.Request(APPS_SCRIPT_URL, data=data, method="POST")
-            with urllib.request.urlopen(req) as response:
-                res_text = response.read().decode('utf-8')
-                if "SUCCESS" in res_text:
-                    st.success(f"Successfully saved and synced {station} Relay run to Google Sheets Cloud!")
-                    return True
-                else:
-                    st.error(f"Apps Script Error: {res_text}")
+            response = requests.post(APPS_SCRIPT_URL, data=payload, timeout=10)
+            res_text = response.text
+            if "SUCCESS" in res_text:
+                st.success(f"Successfully saved and synced {station} Relay run to Google Sheets Cloud!")
+                return True
+            else:
+                st.error(f"Apps Script Error: {res_text}")
         except Exception as e:
             st.error(f"Failed to write to Google Sheets: {e}. Attempting local database write...")
 
@@ -482,11 +512,15 @@ with tab_admin:
             "To enable zero-stress cloud storage so you do not lose data over the month-long tournament, follow these simple steps:"
         )
         st.markdown("""
-        1. **Create your Google Sheet:**
+        1. **Create and Share your Google Sheet (No Technical \"Publish to Web\" Needed!):**
            * Create a standard Google Sheet with two tabs: `individuals` and `relays`.
            * Create the header row in `individuals`: `id`, `name`, `station`, `watch`, `category`, `age_group`, `raw_time_sec`, `penalties_sec`, `final_time_sec`.
            * Create the header row in `relays`: `id`, `station`, `watch`, `division`, `runner_1`, `runner_2`, `runner_3`, `runner_4`, `raw_time_sec`, `penalties_sec`, `final_time_sec`.
-           * Go to **File > Share > Publish to web**. Under Link, choose `individuals` and select **Comma-separated values (.csv)**. Copy that link and paste it into the **Google Sheet Individuals CSV URL** in the sidebar. Repeat for `relays` and paste it into the **Google Sheet Relays CSV URL** sidebar input.
+           * Click the blue **Share** button in the top-right corner of Google Sheets. Under **General access**, change it from \"Restricted\" to **Anyone with the link can view** (this allows the app to read your live data).
+           * Simply copy the **standard URL from your Chrome address bar** for each tab! 
+             * For the `individuals` tab, copy the link and paste it directly into **Google Sheet Individuals CSV URL** in the sidebar.
+             * For the `relays` tab, copy the link and paste it directly into **Google Sheet Relays CSV URL** in the sidebar.
+             * *The app will automatically and instantly convert these into high-performance, real-time export links with ZERO sync delay!*
         2. **Create the Write Apps Script:**
            * In your Google Sheet, go to **Extensions > Apps Script**.
            * Paste the following lightweight, secure code:
