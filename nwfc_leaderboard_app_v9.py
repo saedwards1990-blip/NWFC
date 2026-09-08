@@ -96,7 +96,7 @@ def init_local_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             Name TEXT NOT NULL,
             Station TEXT NOT NULL,
-            Watch / Dept TEXT NOT NULL,
+            Watch TEXT NOT NULL,
             Category TEXT NOT NULL,
             Age_Group TEXT NOT NULL,
             Raw_Time_sec REAL NOT NULL,
