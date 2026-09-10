@@ -641,4 +641,8 @@ with tab_course:
         "The official, single-lane, vertical track layout. Designed with compact station-yard boundaries.",
         unsafe_allow_html=True
     )
-    st.image("nwfc_course_layout.png.jpg", caption="Official Course Layout", use_container_width=True)
+    st.image(
+    "assets/nwfc_course_layout.png.jpg",
+    caption="Official Course Layout",
+    use_container_width=True,
+)
