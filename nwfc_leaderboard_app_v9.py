@@ -636,7 +636,7 @@ with tab_admin:
         """)
 
 with tab_course:
-    st.markdown("### 🗺️ Official Top-Down Course Layout Schema (v15.0)")
+    st.markdown("### 🗺️ Official Top-Down Course Layout")
     st.write(
         "The official, single-lane, vertical track layout. Designed with compact station-yard boundaries.",
         unsafe_allow_html=True
