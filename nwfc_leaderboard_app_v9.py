@@ -71,12 +71,12 @@ DB_PATH = "nwfc_tournament_v8.db"
 STATIONS_LIST = [
     "Aberdyfi", "Abergele", "Abersoch", "Amlwch", "Bala", "Bangor", 
     "Barmouth", "Beaumaris", "Benllech", "Betws-y-Coed", "Blaenau Ffestiniog", 
-    "Buckley", "Caernarfon", "Cerrigydrudion", "Chirk", 
-    "Colwyn Bay", "Conwy", "Corwen", "Deeside", "Denbigh", 
+    "Buckley", "Caernarfon", "Cemaes Bay", "Cerrigydrudion", "Chirk", 
+    "Colwyn Bay", "Conwy", "Corwen", "Criccieth", "Deeside", "Denbigh", 
     "Dolgellau", "Flint", "Harlech", "Holyhead", "Johnstown", "Llanberis", 
     "Llandudno", "Llanfairfechan", "Llangefni", "Llangollen", "Llanrwst", 
-    "Menai Bridge", "Mold", "Nefyn", "Porthmadog", "Prestatyn", 
-    "Pwllheli", "Rhyl", "Ruthin", "Rhosneigr", "St Asaph", "Tywyn", "Wrexham", "HQ", "Other"
+    "Menai Bridge", "Mold", "Nefyn", "Penygroes", "Porthmadog", "Prestatyn", 
+    "Pwllheli", "Rhyl", "Ruthin", "St Asaph", "Tywyn", "Wrexham", "HQ"
 ]
 
 # Master watch and departments list (including newly requested sectors and watches)
@@ -94,29 +94,29 @@ def init_local_db():
     c.execute('''
         CREATE TABLE IF NOT EXISTS individuals (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            Name TEXT NOT NULL,
-            Station TEXT NOT NULL,
-            Watch TEXT NOT NULL,
-            Category TEXT NOT NULL,
-            Age_Group TEXT NOT NULL,
-            Raw_Time_sec REAL NOT NULL,
-            Penalties_sec REAL DEFAULT 0,
-            Final_Time_sec REAL NOT NULL
+            name TEXT NOT NULL,
+            station TEXT NOT NULL,
+            watch TEXT NOT NULL,
+            category TEXT NOT NULL,
+            age_group TEXT NOT NULL,
+            raw_time_sec REAL NOT NULL,
+            penalties_sec REAL DEFAULT 0,
+            final_time_sec REAL NOT NULL
         )
     ''')
     c.execute('''
         CREATE TABLE IF NOT EXISTS relays (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            Station TEXT NOT NULL, -- Will store 'Relay Team Name'
-            Watch TEXT NOT NULL, -- Stores 'N/A'
-            Division TEXT NOT NULL, -- 'Male', 'Female', 'Mixed'
-            Runner_1 TEXT NOT NULL,
-            Runner_2 TEXT NOT NULL,
-            Runner_3 TEXT NOT NULL,
-            Runner_4 TEXT NOT NULL,
-            Raw_Time_sec REAL NOT NULL,
-            Penalties_sec REAL DEFAULT 0,
-            Final_Time_sec REAL NOT NULL
+            station TEXT NOT NULL, -- Will store 'Relay Team Name'
+            watch TEXT NOT NULL, -- Stores 'N/A'
+            division TEXT NOT NULL, -- 'Male', 'Female', 'Mixed'
+            runner_1 TEXT NOT NULL,
+            runner_2 TEXT NOT NULL,
+            runner_3 TEXT NOT NULL,
+            runner_4 TEXT NOT NULL,
+            raw_time_sec REAL NOT NULL,
+            penalties_sec REAL DEFAULT 0,
+            final_time_sec REAL NOT NULL
         )
     ''')
     c.execute("SELECT COUNT(*) FROM individuals")
@@ -136,7 +136,7 @@ def init_local_db():
             ("Sian Jones", "Holyhead", "Green", "Operational Female", "45-49", 148.0, 0, 148.0),
             ("Lowri Thomas", "Colwyn Bay", "Red", "Operational Female", "50-54", 155.0, 5, 160.0),
             ("Heledd Evans", "Llandudno", "Blue", "Operational Female", "55+", 162.0, 0, 162.0),
-            ("Nia Jenkins", "Wrexham", "Corporate", "Non-Operational", "30-34", 95.0, 0, 95.0),
+            ("Nia Jenkins", "Wrexham", "Corporate", "Support Staff", "30-34", 95.0, 0, 95.0),
             ("Mark Owen", "HQ", "Finance", "Support Staff", "40-44", 102.5, 5, 107.5),
             ("Sian Parry", "St Asaph", "Control", "Support Staff", "18-29", 98.0, 0, 98.0),
         ]
@@ -325,7 +325,7 @@ def write_relay_run(team_name, division, r1, r2, r3, r4, raw_time, penalties, fi
 
 
 st.title("🏆 NORTH WALES FIREFIGHTER CHALLENGE (NWFC)")
-st.subheader("Official Live Leaderboard & Ticket Selection System")
+st.subheader("Official Live Roadshow Leaderboard & Ticket Selection System")
 
 # Tab Layout
 tab_leaderboard, tab_selection, tab_admin, tab_course = st.tabs([
@@ -336,7 +336,7 @@ tab_leaderboard, tab_selection, tab_admin, tab_course = st.tabs([
 ])
 
 with tab_leaderboard:
-    st.markdown("### 🏆 Live Leaderboards (Updated Real-Time)")
+    st.markdown("### 🏆 Rolling Leaderboards (Updated Real-Time Across Roadshow)")
     
     col_ind, col_rel = st.columns(2)
     
@@ -347,7 +347,7 @@ with tab_leaderboard:
         filt_c1, filt_c2 = st.columns(2)
         with filt_c1:
             category_filter = st.selectbox("Filter Individual Class:", [
-                "All Operational Staff", "Operational Male Only", "Operational Female Only", "Non-Operational"
+                "All Operational Staff", "Operational Male Only", "Operational Female Only", "Support Staff (Non-Operational)"
             ])
         with filt_c2:
             age_filter = st.selectbox("Filter Age Category:", [
@@ -364,7 +364,7 @@ with tab_leaderboard:
             elif category_filter == "Operational Female Only":
                 df_filtered = df_ind[df_ind['category'] == 'Operational Female'].copy()
             else:
-                df_filtered = df_ind[df_ind['category'] == 'Non-Operational'].copy()
+                df_filtered = df_ind[df_ind['category'] == 'Support Staff'].copy()
                 
             # Direct age filtering integration
             if age_filter != "All Age Groups":
@@ -386,7 +386,7 @@ with tab_leaderboard:
             st.info("No runs recorded in this category yet.")
             
     with col_rel:
-        st.markdown("#### 👥 Service Relays")
+        st.markdown("#### 👥 Inter-Watch Relays")
         division_filter = st.selectbox("Filter Relay Class:", [
             "All Relay Teams", "Male", "Female", "Mixed"
         ])
@@ -474,7 +474,7 @@ with tab_selection:
         st.info("The remaining 8 tickets are automatically distributed based on the proportion of active registrants in each of the 7 brackets.")
 
 with tab_admin:
-    st.markdown("### ⏱️ Marshal Race Time Recording")
+    st.markdown("### ⏱️ Station Marshal Staging Panel")
     password = st.text_input("Enter Admin Password:", type="password")
     
     if password == "nwfc2026":
@@ -502,94 +502,108 @@ with tab_admin:
         
         if st.session_state.admin_mode == "individual":
             st.markdown("#### 🏃 Individual Competitor Entry Form")
-            with st.form("ind_form"):
-                name = st.text_input("Competitor Name:")
-                station = st.selectbox("Station:", STATIONS_LIST)
-                watch = st.selectbox("Watch / Dept / Sector:", WATCHES_LIST)
-                category = st.selectbox("Class Category:", ["Operational Male", "Operational Female", "Non-Operational"])
-                age_group = st.selectbox("Age Bracket:", ['18-29', '30-34', '35-39', '40-44', '45-49', '50-54', '55+'])
-                
-                st.markdown("##### ⏱️ Raw Stopwatch Time")
-                mins = st.number_input("Minutes:", min_value=0, max_value=10, value=1)
-                secs = st.number_input("Seconds (and ms):", min_value=0.0, max_value=59.999, value=30.0, step=0.001, format="%.3f")
-                
-                st.markdown("##### ⚠️ Rule Violations & Penalties")
-                penalties = 0
-                if st.checkbox("Dropped Cleveland Hose Pack (+10s)"): penalties += 10
-                if st.checkbox("Improper RTC Tool Table Placement (+5s per tool)"): penalties += 5
-                if st.checkbox("Improper Forcible Entry Sledge Technique (+10s)"): penalties += 10
-                if st.checkbox("Missed 50m Hose Drag Marker (+10s)"): penalties += 10
-                if st.checkbox("Hose Makeup Box Overflow Boundary (+10s)"): penalties += 10
-                if st.checkbox("Foam Containers Thrown/Fallen/Not Within Tray (+10s)"): penalties += 10
-                if st.checkbox("Dummy Head/Face Drag Warning / Lifted Off Ground / NOt Lifted & Dragged (+15s)"): penalties += 15
-                
-                submit = st.form_submit_button("Log Run and Sync Leaderboard")
-                
-                if submit:
-                    if not name.strip():
-                        st.error("⚠️ Submission Blocked: Competitor Name is required. Please fill in the competitor's name to complete the entry.")
-                    elif mins == 0 and secs == 0.0:
-                        st.error("⚠️ Submission Blocked: Raw Stopwatch Time cannot be 00:00.000. Please enter the raw run time.")
-                    else:
-                        raw_tot = mins * 60 + secs
-                        final_tot = raw_tot + penalties
-                        write_individual_run(name, station, watch, category, age_group, raw_tot, penalties, final_tot)
+            st.info("💡 Note: Keyboard shortcut 'Enter to submit' has been removed to prevent accidental entries. All fields start blank and the submit button unlocks automatically once all required fields are complete.")
+            
+            name = st.text_input("Competitor Name:", value="", placeholder="Enter full name...", key="ind_name")
+            station = st.selectbox("Station:", STATIONS_LIST, index=None, placeholder="Select Station...", key="ind_station")
+            watch = st.selectbox("Watch / Dept / Sector:", WATCHES_LIST, index=None, placeholder="Select Watch / Dept...", key="ind_watch")
+            category = st.selectbox("Class Category:", ["Operational Male", "Operational Female", "Support Staff"], index=None, placeholder="Select Class Category...", key="ind_cat")
+            age_group = st.selectbox("Age Bracket:", ['18-29', '30-34', '35-39', '40-44', '45-49', '50-54', '55+'], index=None, placeholder="Select Age Bracket...", key="ind_age")
+            
+            st.markdown("##### ⏱️ Raw Stopwatch Time")
+            col_m, col_s = st.columns(2)
+            with col_m:
+                mins = st.number_input("Minutes:", min_value=0, max_value=10, value=None, placeholder="0", key="ind_mins")
+            with col_s:
+                secs = st.number_input("Seconds (and ms):", min_value=0.0, max_value=59.999, value=None, step=0.001, format="%.3f", placeholder="0.000", key="ind_secs")
+            
+            st.markdown("##### ⚠️ Rule Violations & Penalties")
+            penalties = 0
+            if st.checkbox("Dropped Cleveland Hose Pack (+10s)", key="ind_p1"): penalties += 10
+            if st.checkbox("Improper RTC Tool Table Placement (+5s per tool)", key="ind_p2"): penalties += 5
+            if st.checkbox("Improper Forcible Entry Sledge Technique (+10s)", key="ind_p3"): penalties += 10
+            if st.checkbox("Missed 50m Hose Drag Marker (+15s)", key="ind_p4"): penalties += 15
+            if st.checkbox("Hose Makeup Box Overflow Boundary (+10s)", key="ind_p5"): penalties += 10
+            if st.checkbox("Foam Containers Slid or Thrown (+10s)", key="ind_p6"): penalties += 10
+            if st.checkbox("Dummy Head / Face Drag Warning (+15s)", key="ind_p7"): penalties += 15
+            
+            # Validation check
+            ind_time_valid = (mins is not None or secs is not None) and ((mins or 0) * 60 + (secs or 0.0) > 0)
+            ind_ready = bool(name and name.strip() and station and watch and category and age_group and ind_time_valid)
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            if not ind_ready:
+                missing = []
+                if not (name and name.strip()): missing.append("Competitor Name")
+                if not station: missing.append("Station")
+                if not watch: missing.append("Watch/Dept")
+                if not category: missing.append("Category")
+                if not age_group: missing.append("Age Bracket")
+                if not ind_time_valid: missing.append("Stopwatch Time > 0")
+                st.warning(f"🔒 Submission Restricted: Please complete the following required fields to enable the submit button: **{', '.join(missing)}**.")
+                st.button("Log Run and Sync Leaderboard", disabled=True, use_container_width=True, key="ind_sub_disabled")
+            else:
+                if st.button("🚀 LOG INDIVIDUAL RUN AND SYNC LEADERBOARD", type="primary", use_container_width=True, key="ind_sub_enabled"):
+                    raw_tot = (mins or 0) * 60 + (secs or 0.0)
+                    final_tot = raw_tot + penalties
+                    write_individual_run(name, station, watch, category, age_group, raw_tot, penalties, final_tot)
                     
         else:
             st.markdown("#### 👥 Relay Team Entry Form")
-            with st.form("relay_form"):
-                relay_team_name = st.text_input("Relay Team Name:")
-                division = st.selectbox("Relay Division:", ["Male", "Female", "Mixed"])
-                
-                st.markdown("##### 🏃 Running Order (4-Person Team)")
-                r1 = st.text_input("Runner 1 (Shuttle Run & RTC):")
-                r2 = st.text_input("Runner 2 (Force Machine & Hose Drag):")
-                r3 = st.text_input("Runner 3 (Hose Makeup & Foam Containers):")
-                r4 = st.text_input("Runner 4 (Dummy Drag):")
-                
-                st.markdown("##### ⏱️ Raw Relay Stopwatch Time")
-                mins = st.number_input("Relay Minutes:", min_value=1, max_value=10, value=3)
-                secs = st.number_input("Relay Seconds (and ms):", min_value=0.0, max_value=59.999, value=15.0, step=0.001, format="%.3f")
-                
-                st.markdown("##### ⚠️ Rule Violations & Penalties")
-                penalties = 0
-                if st.checkbox("Dropped Cleveland Hose Pack (+10s)", key="rel_p1"): penalties += 10
-                if st.checkbox("Improper RTC Tool Table Placement (+5s per tool)", key="rel_p2"): penalties += 5
-                if st.checkbox("Improper Forcible Entry Sledge Technique (+10s)", key="rel_p3"): penalties += 10
-                if st.checkbox("Missed 50m Hose Drag Marker (+10s)", key="rel_p4"): penalties += 10
-                if st.checkbox("Hose Makeup Box Overflow Boundary (+10s)", key="rel_p5"): penalties += 10
-                if st.checkbox("Foam Containers Thrown/Fallen/Not Within Tray (+10s)", key="rel_p6"): penalties += 10
-                if st.checkbox("Dummy Head/Face Drag Warning / Lifted Off Ground / NOt Lifted & Dragged (+15s)", key="rel_p7"): penalties += 15
-                if st.checkbox("Relay Touch-Tag missed or out of zone (+10s)", key="rel_p8"): penalties += 10
-                if st.checkbox("Dummy drag boundary lane crossing (+15s)", key="rel_p9"): penalties += 15
-                
-                submit = st.form_submit_button("Log Relay Team and Sync Leaderboard")
-                
-                if submit:
-                    # Strict validation block to prevent "Enter-to-submit" empty entries
-                    missing_fields = []
-                    if not relay_team_name.strip():
-                        missing_fields.append("Relay Team Name")
-                    if not r1.strip():
-                        missing_fields.append("Runner 1 (Shuttle Run & RTC)")
-                    if not r2.strip():
-                        missing_fields.append("Runner 2 (Force Entry & Hose Drag)")
-                    if not r3.strip():
-                        missing_fields.append("Runner 3 (Hose Makeup & Foam Containers)")
-                    if not r4.strip():
-                        missing_fields.append("Runner 4 (Dummy Drag)")
-                    
-                    if missing_fields:
-                        st.error(f"⚠️ Submission Blocked: Incomplete Entry! Please fill in all required fields: {', '.join(missing_fields)}.")
-                    elif mins == 0 and secs == 0.0:
-                        st.error("⚠️ Submission Blocked: Raw Relay Stopwatch Time cannot be 00:00.000. Please enter the raw run time.")
-                    else:
-                        raw_tot = mins * 60 + secs
-                        final_tot = raw_tot + penalties
-                        write_relay_run(relay_team_name, division, r1, r2, r3, r4, raw_tot, penalties, final_tot)
+            st.info("💡 Note: Keyboard shortcut 'Enter to submit' has been removed to prevent accidental entries. All fields start blank and the submit button unlocks automatically once all required fields are complete.")
+            
+            relay_team_name = st.text_input("Relay Team Name:", value="", placeholder="Enter team name...", key="rel_team")
+            division = st.selectbox("Relay Division:", ["Male", "Female", "Mixed"], index=None, placeholder="Select Relay Division...", key="rel_div")
+            
+            st.markdown("##### 🏃 Running Order (4-Person Team)")
+            r1 = st.text_input("Runner 1 (Shuttle & RTC):", value="", placeholder="Runner 1 full name...", key="rel_r1")
+            r2 = st.text_input("Runner 2 (Force & Drag):", value="", placeholder="Runner 2 full name...", key="rel_r2")
+            r3 = st.text_input("Runner 3 (Makeup & Foam):", value="", placeholder="Runner 3 full name...", key="rel_r3")
+            r4 = st.text_input("Runner 4 (Dummy Rescue):", value="", placeholder="Runner 4 full name...", key="rel_r4")
+            
+            st.markdown("##### ⏱️ Raw Relay Stopwatch Time")
+            col_m, col_s = st.columns(2)
+            with col_m:
+                mins = st.number_input("Relay Minutes:", min_value=0, max_value=10, value=None, placeholder="0", key="rel_mins")
+            with col_s:
+                secs = st.number_input("Relay Seconds (and ms):", min_value=0.0, max_value=59.999, value=None, step=0.001, format="%.3f", placeholder="0.000", key="rel_secs")
+            
+            st.markdown("##### ⚠️ Rule Violations & Penalties")
+            penalties = 0
+            if st.checkbox("Dropped Cleveland Hose Pack (+10s)", key="rel_p1"): penalties += 10
+            if st.checkbox("Improper RTC Tool Table Placement (+5s per tool)", key="rel_p2"): penalties += 5
+            if st.checkbox("Improper Forcible Entry Sledge Technique (+10s)", key="rel_p3"): penalties += 10
+            if st.checkbox("Missed 50m Hose Drag Marker (+15s)", key="rel_p4"): penalties += 15
+            if st.checkbox("Hose Makeup Box Overflow Boundary (+10s)", key="rel_p5"): penalties += 10
+            if st.checkbox("Foam Containers Slid or Thrown (+10s)", key="rel_p6"): penalties += 10
+            if st.checkbox("Dummy Head / Face Drag Warning (+15s)", key="rel_p7"): penalties += 15
+            if st.checkbox("Relay Touch-Tag missed or out of zone (+10s)", key="rel_p8"): penalties += 10
+            if st.checkbox("Dummy drag boundary lane crossing (+15s)", key="rel_p9"): penalties += 15
+            
+            # Validation check
+            rel_time_valid = (mins is not None or secs is not None) and ((mins or 0) * 60 + (secs or 0.0) > 0)
+            rel_ready = bool(relay_team_name and relay_team_name.strip() and division and r1 and r1.strip() and r2 and r2.strip() and r3 and r3.strip() and r4 and r4.strip() and rel_time_valid)
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            if not rel_ready:
+                missing = []
+                if not (relay_team_name and relay_team_name.strip()): missing.append("Relay Team Name")
+                if not division: missing.append("Division")
+                if not (r1 and r1.strip()): missing.append("Runner 1")
+                if not (r2 and r2.strip()): missing.append("Runner 2")
+                if not (r3 and r3.strip()): missing.append("Runner 3")
+                if not (r4 and r4.strip()): missing.append("Runner 4")
+                if not rel_time_valid: missing.append("Stopwatch Time > 0")
+                st.warning(f"🔒 Submission Restricted: Please complete the following required fields to enable the submit button: **{', '.join(missing)}**.")
+                st.button("Log Relay Team and Sync Leaderboard", disabled=True, use_container_width=True, key="rel_sub_disabled")
+            else:
+                if st.button("🚀 LOG RELAY TEAM AND SYNC LEADERBOARD", type="primary", use_container_width=True, key="rel_sub_enabled"):
+                    raw_tot = (mins or 0) * 60 + (secs or 0.0)
+                    final_tot = raw_tot + penalties
+                    write_relay_run(relay_team_name, division, r1, r2, r3, r4, raw_tot, penalties, final_tot)
 
     else:
-        st.info("Enter password '*******' in the field above to activate the marshal logger panel.")
+        st.info("Enter password 'nwfc2026' in the field above to activate the marshal logger panel.")
         
         # Guide Panel for Google Sheets Setup
         st.markdown("---")
@@ -636,13 +650,9 @@ with tab_admin:
         """)
 
 with tab_course:
-    st.markdown("### 🗺️ Official Top-Down Course Layout")
+    st.markdown("### 🗺️ Official Top-Down Course Layout Schema (v15.0)")
     st.write(
         "The official, single-lane, vertical track layout. Designed with compact station-yard boundaries.",
         unsafe_allow_html=True
     )
-    st.image(
-    "assets/nwfc_course_layout.png.jpg",
-    caption="Official Course Layout",
-    use_container_width=True,
-)
+    st.info("The official layout is displayed as the unamended source 'NWFFC Layout Image.png' in your notebook panel. Please refer to that file for the top-down visual map.")
