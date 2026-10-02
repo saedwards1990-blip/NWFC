@@ -578,6 +578,54 @@ with tab_admin:
             )
             st.caption("Changes here apply only to your current browser session. To make a change permanent for everyone, update it in the app's Streamlit secrets instead.")
 
+        # One-time setup reference — collapsed by default and only ever shown to an
+        # authenticated marshal. This has nothing to do with running the event day to
+        # day; it's historical setup documentation from when the Google Sheets backend
+        # was first configured, kept here for reference rather than deleted outright.
+        with st.expander("📂 Google Sheets Cloud Backend — Setup Reference (rarely needed)"):
+            st.write(
+                "This was used to configure the Google Sheets cloud backend when it was first set up. "
+                "You shouldn't need this during normal event operation — it's kept here only in case the "
+                "backend ever needs to be reconfigured or rebuilt from scratch."
+            )
+            st.markdown("""
+            1. **Create and Share your Google Sheet (No Technical "Publish to Web" Needed!):**
+               * Create a standard Google Sheet with two tabs: `individuals` and `relays`.
+               * Create the header row in `individuals`: `id`, `name`, `station`, `watch`, `category`, `age_group`, `raw_time_sec`, `penalties_sec`, `final_time_sec`, `formatted_time`.
+               * Create the header row in `relays`: `id`, `station`, `watch`, `division`, `runner_1`, `runner_2`, `runner_3`, `runner_4`, `raw_time_sec`, `penalties_sec`, `final_time_sec`, `formatted_time`.
+               * Click the blue **Share** button in the top-right corner of Google Sheets. Under **General access**, change it from "Restricted" to **Anyone with the link can view** (this allows the app to read your live data).
+               * Simply copy the **standard URL from your Chrome address bar** for each tab!
+                 * For the `individuals` tab, copy the link and paste it into **Google Sheet Individuals CSV URL** in the Cloud Backend Configuration section above.
+                 * For the `relays` tab, copy the link and paste it into **Google Sheet Relays CSV URL** in the Cloud Backend Configuration section above.
+                 * *The app will automatically and instantly convert these into high-performance, real-time export links with ZERO sync delay!*
+            2. **Create the Write Apps Script:**
+               * In your Google Sheet, go to **Extensions > Apps Script**.
+               * Paste the following lightweight, secure code:
+                 ```javascript
+                 function doPost(e) {
+                   var action = e.parameter.action;
+                   var sheetName = (action === "add_individual") ? "individuals" : "relays";
+                   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+                   if (!sheet) {
+                     return ContentService.createTextOutput("ERROR: Sheet not found");
+                   }
+                   var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+                   var nextId = sheet.getLastRow();
+                   var newRow = headers.map(function(h) {
+                     if (h === "id") return nextId;
+                     return e.parameter[h] || "";
+                   });
+                   sheet.appendRow(newRow);
+                   return ContentService.createTextOutput("SUCCESS");
+                 }
+                 ```
+               * Click **Deploy > New Deployment**. Choose **Web App**.
+               * Set **Execute as:** *Me*, and **Who has access:** *Anyone*.
+               * Copy the generated **Web App URL** and paste it into **Google Apps Script Web App URL** in the Cloud Backend Configuration section above.
+            3. **Enjoy Zero Data Loss:**
+               * Once these are set, the app will securely read and write directly to your cloud sheet. Closing the app, browser, or signing out will never wipe your data!
+            """)
+
         # Initialise session state to track the active form if not present
         if 'admin_mode' not in st.session_state:
             st.session_state.admin_mode = "individual"
@@ -702,50 +750,6 @@ with tab_admin:
 
     else:
         st.info("Enter password '*******' in the field above to activate the marshal logger panel.")
-        
-        # Guide Panel for Google Sheets Setup
-        st.markdown("---")
-        st.markdown("### 📂 How to Configure Google Sheets Cloud Backend")
-        st.write(
-            "To enable zero-stress cloud storage so you do not lose data over the month-long tournament, follow these simple steps:"
-        )
-        st.markdown("""
-        1. **Create and Share your Google Sheet (No Technical "Publish to Web" Needed!):**
-           * Create a standard Google Sheet with two tabs: `individuals` and `relays`.
-           * Create the header row in `individuals`: `id`, `name`, `station`, `watch`, `category`, `age_group`, `raw_time_sec`, `penalties_sec`, `final_time_sec`, `formatted_time`.
-           * Create the header row in `relays`: `id`, `station`, `watch`, `division`, `runner_1`, `runner_2`, `runner_3`, `runner_4`, `raw_time_sec`, `penalties_sec`, `final_time_sec`, `formatted_time`.
-           * Click the blue **Share** button in the top-right corner of Google Sheets. Under **General access**, change it from "Restricted" to **Anyone with the link can view** (this allows the app to read your live data).
-           * Simply copy the **standard URL from your Chrome address bar** for each tab! 
-             * For the `individuals` tab, copy the link and paste it directly into **Google Sheet Individuals CSV URL** in the sidebar.
-             * For the `relays` tab, copy the link and paste it directly into **Google Sheet Relays CSV URL** in the sidebar.
-             * *The app will automatically and instantly convert these into high-performance, real-time export links with ZERO sync delay!*
-        2. **Create the Write Apps Script:**
-           * In your Google Sheet, go to **Extensions > Apps Script**.
-           * Paste the following lightweight, secure code:
-             ```javascript
-             function doPost(e) {
-               var action = e.parameter.action;
-               var sheetName = (action === "add_individual") ? "individuals" : "relays";
-               var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
-               if (!sheet) {
-                 return ContentService.createTextOutput("ERROR: Sheet not found");
-               }
-               var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-               var nextId = sheet.getLastRow();
-               var newRow = headers.map(function(h) {
-                 if (h === "id") return nextId;
-                 return e.parameter[h] || "";
-               });
-               sheet.appendRow(newRow);
-               return ContentService.createTextOutput("SUCCESS");
-             }
-             ```
-           * Click **Deploy > New Deployment**. Choose **Web App**.
-           * Set **Execute as:** *Me*, and **Who has access:** *Anyone*.
-           * Copy the generated **Web App URL** and paste it into the **Google Apps Script Web App URL** field in the sidebar.
-        3. **Enjoy Zero Data Loss:** 
-           * Once these are set, the app will securely read and write directly to your cloud sheet. Closing the app, browser, or signing out will never wipe your data!
-        """)
 
 with tab_course:
     st.markdown("### 📖 Competition Information")
