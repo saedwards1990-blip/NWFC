@@ -44,26 +44,20 @@ st.set_page_config(
 # ==========================================
 # CLOUD BACKEND CONFIGURATION (GOOGLE SHEETS)
 # ==========================================
-# To enable permanent, zero-stress cloud storage across weeks, populate these URLs.
-# If left blank, the app will automatically and gracefully fall back to local SQLite storage.
-GSHEET_INDIVIDUALS_CSV = st.sidebar.text_input(
-    "Google Sheet Individuals CSV URL:",
-    value=st.secrets.get("GSHEET_INDIVIDUALS_CSV", ""),
-    help="Paste the web-published CSV link or export link of your Google Sheet for individuals."
-)
+# These are read from Streamlit secrets by default and are NOT shown to public
+# visitors anywhere on the site. An authenticated marshal can override them for
+# the current session from the password-protected Marshal Timer & Admin tab —
+# see the "Cloud Backend Configuration" expander inside that tab further down.
+if 'gsheet_individuals_csv' not in st.session_state:
+    st.session_state['gsheet_individuals_csv'] = st.secrets.get("GSHEET_INDIVIDUALS_CSV", "")
+if 'gsheet_relays_csv' not in st.session_state:
+    st.session_state['gsheet_relays_csv'] = st.secrets.get("GSHEET_RELAYS_CSV", "")
+if 'apps_script_url' not in st.session_state:
+    st.session_state['apps_script_url'] = st.secrets.get("APPS_SCRIPT_URL", "")
 
-GSHEET_RELAYS_CSV = st.sidebar.text_input(
-    "Google Sheet Relays CSV URL:",
-    value=st.secrets.get("GSHEET_RELAYS_CSV", ""),
-    help="Paste the web-published CSV link or export link of your Google Sheet for relays."
-)
-
-APPS_SCRIPT_URL = st.sidebar.text_input(
-    "Google Apps Script Web App URL:",
-    value=st.secrets.get("APPS_SCRIPT_URL", ""),
-    type="password",
-    help="Paste the deployed Google Apps Script Web App URL to enable writing directly to your Google Sheet."
-)
+GSHEET_INDIVIDUALS_CSV = st.session_state['gsheet_individuals_csv']
+GSHEET_RELAYS_CSV = st.session_state['gsheet_relays_csv']
+APPS_SCRIPT_URL = st.session_state['apps_script_url']
 
 DB_PATH = "nwfc_tournament_v8.db"
 
@@ -331,10 +325,10 @@ st.subheader("Official Live Leaderboard & Ticket Selection System")
 
 # Tab Layout
 tab_leaderboard, tab_selection, tab_admin, tab_course = st.tabs([
-    "📊 Live Standings", 
-    "🎟️ Swansea 2027 Ticket Selection", 
-    "⏱️ Marshal Timer & Admin", 
-    "🗺️ Course Diagram"
+    "📊 Live Standings",
+    "🎟️ Swansea 2027 Ticket Selection",
+    "⏱️ Marshal Timer & Admin",
+    "📖 Competition Information"
 ])
 
 with tab_leaderboard:
@@ -561,6 +555,29 @@ with tab_admin:
         else:
             st.info(f"☁️ Last successful cloud sync: {last_sync.strftime('%H:%M:%S')}")
 
+        # Cloud backend configuration — marshal-only. These fields are pre-filled
+        # from Streamlit secrets and normally never need touching; they're here
+        # purely as a manual override for the current browser session, kept out
+        # of public view entirely.
+        with st.expander("⚙️ Cloud Backend Configuration (Marshal Only — overrides this session only)"):
+            st.text_input(
+                "Google Sheet Individuals CSV URL:",
+                key="gsheet_individuals_csv",
+                help="Paste the web-published CSV link or export link of your Google Sheet for individuals."
+            )
+            st.text_input(
+                "Google Sheet Relays CSV URL:",
+                key="gsheet_relays_csv",
+                help="Paste the web-published CSV link or export link of your Google Sheet for relays."
+            )
+            st.text_input(
+                "Google Apps Script Web App URL:",
+                key="apps_script_url",
+                type="password",
+                help="Paste the deployed Google Apps Script Web App URL to enable writing directly to your Google Sheet."
+            )
+            st.caption("Changes here apply only to your current browser session. To make a change permanent for everyone, update it in the app's Streamlit secrets instead.")
+
         # Initialise session state to track the active form if not present
         if 'admin_mode' not in st.session_state:
             st.session_state.admin_mode = "individual"
@@ -731,13 +748,208 @@ with tab_admin:
         """)
 
 with tab_course:
-    st.markdown("### 🗺️ Official Top-Down Course Layout")
+    st.markdown("### 📖 Competition Information")
     st.write(
-        "The official, single-lane, vertical track layout. Designed with compact station-yard boundaries.",
-        unsafe_allow_html=True
+        "Everything you need to know before you compete: the official course layout, a station-by-station "
+        "breakdown of every obstacle, what's expected of individual and relay competitors, and the full "
+        "rules and penalties reference. Video walkthroughs will appear here as they're added."
     )
-    st.image(
-    "assets/nwfc_course_layout.png.jpg",
-    caption="Official Course Layout",
-    use_container_width=True,
-)
+
+    info_overview, info_stations, info_individual, info_relay, info_rules = st.tabs([
+        "🗺️ Course Overview",
+        "🏗️ Station-by-Station Guide",
+        "🏃 Individual Event",
+        "👥 Relay Event",
+        "⚠️ Rules & Penalties",
+    ])
+
+    # ---------------- Course Overview ----------------
+    with info_overview:
+        st.markdown("#### Official Top-Down Course Layout")
+        st.write(
+            "The official, single-lane, vertical track layout. Designed with compact station-yard boundaries.",
+            unsafe_allow_html=True
+        )
+        st.image(
+            "assets/nwfc_course_layout.png.jpg",
+            caption="Official Course Layout",
+            use_container_width=True,
+        )
+
+        st.markdown("---")
+        st.markdown("##### 🎥 Full Course Walkthrough")
+        # Paste a YouTube, Vimeo, or direct video file URL here once recorded.
+        FULL_COURSE_VIDEO_URL = ""
+        if FULL_COURSE_VIDEO_URL:
+            st.video(FULL_COURSE_VIDEO_URL)
+        else:
+            st.info("🎥 Full course walkthrough video coming soon.")
+
+    # ---------------- Station-by-Station Guide ----------------
+    with info_stations:
+        st.markdown("#### Station-by-Station Guide")
+        st.caption(
+            "⚠️ Editor's note: the apparatus names and penalty codes below are taken directly from the "
+            "official course diagram and the Marshal entry forms, so those are accurate. The bracketed "
+            "[ ] technique descriptions are placeholders only — replace them with the exact wording from "
+            "your rulebook before publishing this page. Claude has not seen the rulebook and has not verified "
+            "the actual technique requirements."
+        )
+
+        # Paste a video URL per station as footage becomes available.
+        STATION_VIDEOS = {
+            "hose_drag": "",
+            "rtc_tools": "",
+            "force_machine": "",
+            "dummy_drag": "",
+            "hose_lay": "",
+            "containers": "",
+            "hose_makeup": "",
+        }
+
+        stations = [
+            {
+                "key": "hose_drag",
+                "title": "1. Hose Drag",
+                "desc": "[Describe the required technique for dragging the coiled hose from the Start marker.]",
+                "acceptable": "[State what counts as a clean drag vs a faulted one.]",
+                "penalty": "Missed 50m Hose Drag Marker — +15s",
+            },
+            {
+                "key": "rtc_tools",
+                "title": "2. RTC Tool Table",
+                "desc": "[Describe how tools must be placed on the RTC Tool Table.]",
+                "acceptable": "[State correct placement vs incorrect placement.]",
+                "penalty": "Improper RTC Tool Table Placement — +5s per tool",
+            },
+            {
+                "key": "force_machine",
+                "title": "3. Corhaven Force Machine",
+                "desc": "[Describe the required forcible entry sledge technique at the Hammer Placement Mat / Corhaven Force Machine.]",
+                "acceptable": "[State correct technique vs incorrect technique.]",
+                "penalty": "Improper Forcible Entry Sledge Technique — +10s",
+            },
+            {
+                "key": "dummy_drag",
+                "title": "4. Dummy Rescue Drag",
+                "desc": "[Describe the required technique for moving the 70kg dummy across the Crash Mat to the Finish.]",
+                "acceptable": "[State what triggers a head/face drag warning.]",
+                "penalty": "Dummy Head / Face Drag Warning — +15s",
+            },
+            {
+                "key": "hose_lay",
+                "title": "5. 70mm Layflat Hose Lay (25m)",
+                "desc": "[Describe how the hose must be run out along this 25m section.]",
+                "acceptable": "[State correct vs incorrect hose lay technique.]",
+                "penalty": "See Hose Makeup Box penalty below for the return leg.",
+            },
+            {
+                "key": "containers",
+                "title": "6. 4x Containers Carry (20kg/20L each)",
+                "desc": "[Describe how the four containers must be carried from the Container Tray.]",
+                "acceptable": "[State that containers must not be thrown, slid, or dropped outside the tray.]",
+                "penalty": "Foam Containers Slid or Thrown — +10s",
+            },
+            {
+                "key": "hose_makeup",
+                "title": "7. Hose Makeup Box",
+                "desc": "[Describe how the hose must be made up (coiled/packed) back into the Lay Flat Hose Box.]",
+                "acceptable": "[State the marked boundary the hose must stay within.]",
+                "penalty": "Hose Makeup Box Overflow Boundary — +10s",
+            },
+        ]
+
+        for s in stations:
+            with st.expander(s["title"]):
+                col_desc, col_video = st.columns([3, 2])
+                with col_desc:
+                    st.markdown(f"**What to do:** {s['desc']}")
+                    st.markdown(f"**Acceptable / Not acceptable:** {s['acceptable']}")
+                    st.markdown(f"**Penalty if breached:** {s['penalty']}")
+                with col_video:
+                    video_url = STATION_VIDEOS.get(s["key"], "")
+                    if video_url:
+                        st.video(video_url)
+                    else:
+                        st.info("🎥 Video coming soon")
+
+        st.markdown("---")
+        st.caption(
+            "Relay-only penalties (Relay Touch-Tag Missed or Out of Zone, Dummy Drag Boundary Lane Crossing) "
+            "are covered in the Relay Event and Rules & Penalties tabs."
+        )
+
+    # ---------------- Individual Event ----------------
+    with info_individual:
+        st.markdown("#### Individual Event Format")
+        st.write(
+            "[Describe the full individual run end-to-end here: the competitor completes every station solo, "
+            "start to finish, against the clock. Add any rules specific to the individual event that aren't "
+            "already covered in Rules & Penalties.]"
+        )
+        INDIVIDUAL_VIDEO_URL = ""
+        if INDIVIDUAL_VIDEO_URL:
+            st.video(INDIVIDUAL_VIDEO_URL)
+        else:
+            st.info("🎥 Individual full run-through video coming soon.")
+
+    # ---------------- Relay Event ----------------
+    with info_relay:
+        st.markdown("#### Relay Event Format")
+        st.write(
+            "A relay team is four runners. Each runner takes a specific leg of the course — these are the "
+            "same roles marshals select on the Relay Team Entry Form, so the labels here match exactly what "
+            "appears when a relay time is logged."
+        )
+        RELAY_VIDEOS = {
+            "r1": "",
+            "r2": "",
+            "r3": "",
+            "r4": "",
+        }
+        relay_legs = [
+            ("r1", "Runner 1 — Shuttle & RTC",
+             "[Describe exactly what Runner 1 does: the shuttle run and RTC tool stage, and where the handover to Runner 2 happens.]"),
+            ("r2", "Runner 2 — Force & Drag",
+             "[Describe exactly what Runner 2 does: the force machine and hose drag stage, and where the handover to Runner 3 happens.]"),
+            ("r3", "Runner 3 — Makeup & Foam",
+             "[Describe exactly what Runner 3 does: the hose makeup and foam container stage, and where the handover to Runner 4 happens.]"),
+            ("r4", "Runner 4 — Dummy Rescue",
+             "[Describe exactly what Runner 4 does: the dummy rescue drag to the finish.]"),
+        ]
+        for key, leg_name, desc in relay_legs:
+            with st.expander(leg_name):
+                st.write(desc)
+                video_url = RELAY_VIDEOS.get(key, "")
+                if video_url:
+                    st.video(video_url)
+                else:
+                    st.info("🎥 Video coming soon")
+
+    # ---------------- Rules & Penalties ----------------
+    with info_rules:
+        st.markdown("#### Full Rules & Penalties Reference")
+        st.write("The following penalties apply to both individual and relay entries:")
+        common_penalties = pd.DataFrame([
+            ("Dropped Cleveland Hose Pack", "+10s"),
+            ("Improper RTC Tool Table Placement", "+5s per tool"),
+            ("Improper Forcible Entry Sledge Technique", "+10s"),
+            ("Missed 50m Hose Drag Marker", "+15s"),
+            ("Hose Makeup Box Overflow Boundary", "+10s"),
+            ("Foam Containers Slid or Thrown", "+10s"),
+            ("Dummy Head / Face Drag Warning", "+15s"),
+        ], columns=["Violation", "Penalty"])
+        st.table(common_penalties)
+
+        st.write("These additional penalties apply to relay entries only:")
+        relay_penalties = pd.DataFrame([
+            ("Relay Touch-Tag Missed or Out of Zone", "+10s"),
+            ("Dummy Drag Boundary Lane Crossing", "+15s"),
+        ], columns=["Violation", "Penalty"])
+        st.table(relay_penalties)
+
+        st.caption(
+            "⚠️ This table is maintained separately from the penalty checkboxes on the Marshal entry forms. "
+            "If a penalty or its value changes, update both places so this public page and the live entry "
+            "form never drift out of sync."
+        )
