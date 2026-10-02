@@ -34,7 +34,6 @@ def convert_to_export_url(url):
             return f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/export?format=csv&gid={gid}"
     return url
 
-st.set_page_collab_width = True
 st.set_page_config(
     page_title="North Wales Firefighter Challenge (NWFC)",
     layout="wide",
@@ -477,7 +476,8 @@ with tab_admin:
     st.markdown("### ⏱️ Marshal Race Time Recording")
     password = st.text_input("Enter Admin Password:", type="password")
     
-    if password == "nwfc2026":
+    admin_pw = st.secrets.get("ADMIN_PASSWORD", "")
+    if admin_pw and password == admin_pw:
         st.success("Access Granted. Marshal Timing Form Active.")
         
         # Initialise session state to track the active form if not present
@@ -502,7 +502,7 @@ with tab_admin:
         
         if st.session_state.admin_mode == "individual":
             st.markdown("#### 🏃 Individual Competitor Entry Form")
-            st.info("💡 Note: Keyboard shortcut 'Enter to submit' has been removed to prevent accidental entries. All fields start blank and the submit button unlocks automatically once all required fields are complete.")
+            st.info("💡All fields start blank and the submit button unlocks automatically once all required fields are complete💡")
             
             name = st.text_input("Competitor Name:", value="", placeholder="Enter full name...", key="ind_name")
             station = st.selectbox("Station:", STATIONS_LIST, index=None, placeholder="Select Station...", key="ind_station")
