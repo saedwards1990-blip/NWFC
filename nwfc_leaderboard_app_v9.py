@@ -137,8 +137,8 @@ def init_local_db():
             ("Lowri Thomas", "Colwyn Bay", "Red", "Operational Female", "50-54", 155.0, 5, 160.0),
             ("Heledd Evans", "Llandudno", "Blue", "Operational Female", "55+", 162.0, 0, 162.0),
             ("Nia Jenkins", "Wrexham", "Corporate", "Non-Operational", "30-34", 95.0, 0, 95.0),
-            ("Mark Owen", "HQ", "Finance", "Support Staff", "40-44", 102.5, 5, 107.5),
-            ("Sian Parry", "St Asaph", "Control", "Support Staff", "18-29", 98.0, 0, 98.0),
+            ("Mark Owen", "HQ", "Finance", "Non-Operational", "40-44", 102.5, 5, 107.5),
+            ("Sian Parry", "St Asaph", "Control", "Non-Operational", "18-29", 98.0, 0, 98.0),
         ]
         c.executemany("INSERT INTO individuals (name, station, watch, category, age_group, raw_time_sec, penalties_sec, final_time_sec) VALUES (?,?,?,?,?,?,?,?)", mock_ind)
     c.execute("SELECT COUNT(*) FROM relays")
@@ -271,7 +271,7 @@ def write_individual_run(name, station, watch, category, age_group, raw_time, pe
                 st.error(f"Apps Script Error: {res_text}")
         except Exception as e:
             st.error(f"Failed to write to Google Sheets: {e}. Attempting local database write...")
-            
+
     # Fallback to Local
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
@@ -459,33 +459,33 @@ with tab_selection:
     # Proportional Allocation logic
     st.markdown("#### 🎯 Proportional Remaining 8-Ticket Distribution")
     all_ages = ['18-29', '30-34', '35-39', '40-44', '45-49', '50-54', '55+']
-    
+
     if len(males) >= 4 and len(females) >= 4:
         top_8 = pd.concat([males.head(4), females.head(4)])
         guaranteed_names = set(top_8['name'])
         top_8_ages = list(top_8['age_group'])
         guaranteed_bracket_counts = {age: top_8_ages.count(age) for age in all_ages}
-        
+
         st.write("<b>Age Brackets represented in Guaranteed Top 8:</b>", unsafe_allow_html=True)
         cols = st.columns(len(all_ages))
         for idx, age in enumerate(all_ages):
             with cols[idx]:
                 st.metric(label=f"Bracket {age}", value=guaranteed_bracket_counts[age])
-        
+
         # Remaining pool = all operational competitors not already guaranteed a seat
         pool = df_all_ind[df_all_ind['category'].isin(['Operational Male', 'Operational Female'])].copy()
         pool = pool[~pool['name'].isin(guaranteed_names)]
         remaining_bracket_counts = {age: int((pool['age_group'] == age).sum()) for age in all_ages}
-        
+
         # Weight each bracket by its remaining field size, reduced by how many guaranteed
         # seats that bracket already holds (brackets already well-represented in the top 8
         # are "negated" down, not excluded entirely, so one strong bracket can't both sweep
         # the guaranteed 8 AND dominate the proportional 8)
         weights = {age: max(0, remaining_bracket_counts[age] - guaranteed_bracket_counts[age]) for age in all_ages}
         total_weight = sum(weights.values())
-        
+
         TICKETS_REMAINING = 8
-        
+
         if total_weight == 0 or pool.empty:
             st.warning("No remaining eligible competitors to distribute the 8 eligible tickets across.")
         else:
@@ -496,7 +496,7 @@ with tab_selection:
             remainder_order = sorted(all_ages, key=lambda a: raw_shares[a] - quota[a], reverse=True)
             for age in remainder_order[:shortfall]:
                 quota[age] += 1
-            
+
             # Cap each bracket's quota at how many people are actually available in it,
             # and hand any leftover tickets to the next highest-weighted bracket with spare capacity
             leftover = 0
@@ -511,13 +511,13 @@ with tab_selection:
                 spare.sort(key=lambda a: weights[a], reverse=True)
                 quota[spare[0]] += 1
                 leftover -= 1
-            
+
             st.write("<b>Remaining 8 Tickets — Quota by Bracket:</b>", unsafe_allow_html=True)
             cols2 = st.columns(len(all_ages))
             for idx, age in enumerate(all_ages):
                 with cols2[idx]:
                     st.metric(label=f"Bracket {age}", value=quota[age])
-            
+
             # Within each bracket's quota, take the fastest remaining competitors
             selected_parts = []
             for age in all_ages:
@@ -526,13 +526,13 @@ with tab_selection:
                     continue
                 bracket_pool = pool[pool['age_group'] == age].sort_values(by="final_time_sec", ascending=True)
                 selected_parts.append(bracket_pool.head(n))
-            
+
             if selected_parts:
                 remaining_selection = pd.concat(selected_parts).sort_values(by="final_time_sec", ascending=True)
                 remaining_selection["Time"] = remaining_selection["final_time_sec"].apply(format_time)
                 st.write("<b>Remaining 8 Ticket Winners:</b>", unsafe_allow_html=True)
                 st.table(remaining_selection[["name", "category", "age_group", "Time"]].reset_index(drop=True))
-                
+
                 st.markdown("---")
                 st.write("<b>🏆 Full 16-Ticket Roster (Guaranteed 8 + Proportional 8):</b>", unsafe_allow_html=True)
                 full_roster = pd.concat([top_8, remaining_selection]).sort_values(by="final_time_sec", ascending=True).copy()
@@ -549,7 +549,7 @@ with tab_admin:
     admin_pw = st.secrets.get("ADMIN_PASSWORD", "")
     if admin_pw and password == admin_pw:
         st.success("Access Granted. Marshal Timing Form Active.")
-        
+
         # Sync health indicator — visible at all times so marshals know whether
         # the cloud connection is currently working, without having to remember
         # the last error message they saw.
@@ -560,7 +560,7 @@ with tab_admin:
             st.info("☁️ Cloud sync status: no successful sync yet this session.")
         else:
             st.info(f"☁️ Last successful cloud sync: {last_sync.strftime('%H:%M:%S')}")
-        
+
         # Initialise session state to track the active form if not present
         if 'admin_mode' not in st.session_state:
             st.session_state.admin_mode = "individual"
@@ -588,7 +588,7 @@ with tab_admin:
             name = st.text_input("Competitor Name:", value="", placeholder="Enter full name...", key="ind_name")
             station = st.selectbox("Station:", STATIONS_LIST, index=None, placeholder="Select Station...", key="ind_station")
             watch = st.selectbox("Watch / Dept / Sector:", WATCHES_LIST, index=None, placeholder="Select Watch / Dept...", key="ind_watch")
-            category = st.selectbox("Class Category:", ["Operational Male", "Operational Female", "Support Staff"], index=None, placeholder="Select Class Category...", key="ind_cat")
+            category = st.selectbox("Class Category:", ["Operational Male", "Operational Female", "Non-Operational"], index=None, placeholder="Select Class Category...", key="ind_cat")
             age_group = st.selectbox("Age Bracket:", ['18-29', '30-34', '35-39', '40-44', '45-49', '50-54', '55+'], index=None, placeholder="Select Age Bracket...", key="ind_age")
             
             st.markdown("##### ⏱️ Raw Stopwatch Time")
