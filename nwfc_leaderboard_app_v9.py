@@ -8,6 +8,7 @@ import csv
 import io
 import json
 import requests
+from datetime import datetime
 
 # Helper to convert standard Google Sheet URL to direct, real-time export CSV URL (bypassing 5-minute cache delay)
 def convert_to_export_url(url):
@@ -263,6 +264,7 @@ def write_individual_run(name, station, watch, category, age_group, raw_time, pe
             response = requests.post(APPS_SCRIPT_URL, data=payload, timeout=10)
             res_text = response.text
             if "SUCCESS" in res_text:
+                st.session_state['last_sync_time'] = datetime.now()
                 st.success(f"Successfully saved and synced {name}'s run to Google Sheets Cloud!")
                 return True
             else:
@@ -279,7 +281,7 @@ def write_individual_run(name, station, watch, category, age_group, raw_time, pe
     )
     conn.commit()
     conn.close()
-    st.success(f"Logged {name}'s run locally: {formatted_t}")
+    st.warning(f"⚠️ NOT SAVED TO CLOUD — logged locally only for {name}: {formatted_t}. Write this down on paper now as a backup.")
     return True
 
 def write_relay_run(team_name, division, r1, r2, r3, r4, raw_time, penalties, final_time):
@@ -303,6 +305,7 @@ def write_relay_run(team_name, division, r1, r2, r3, r4, raw_time, penalties, fi
             response = requests.post(APPS_SCRIPT_URL, data=payload, timeout=10)
             res_text = response.text
             if "SUCCESS" in res_text:
+                st.session_state['last_sync_time'] = datetime.now()
                 st.success(f"Successfully saved and synced {team_name} Relay run to Google Sheets Cloud!")
                 return True
             else:
@@ -319,7 +322,7 @@ def write_relay_run(team_name, division, r1, r2, r3, r4, raw_time, penalties, fi
     )
     conn.commit()
     conn.close()
-    st.success(f"Logged {team_name} Relay run locally: {formatted_t}")
+    st.warning(f"⚠️ NOT SAVED TO CLOUD — logged locally only for {team_name}: {formatted_t}. Write this down on paper now as a backup.")
     return True
 
 
@@ -458,19 +461,86 @@ with tab_selection:
     all_ages = ['18-29', '30-34', '35-39', '40-44', '45-49', '50-54', '55+']
     
     if len(males) >= 4 and len(females) >= 4:
-        top_8_ages = list(males.head(4)['age_group']) + list(females.head(4)['age_group'])
-        age_counts = {age: top_8_ages.count(age) for age in all_ages}
+        top_8 = pd.concat([males.head(4), females.head(4)])
+        guaranteed_names = set(top_8['name'])
+        top_8_ages = list(top_8['age_group'])
+        guaranteed_bracket_counts = {age: top_8_ages.count(age) for age in all_ages}
         
-        st.write("<b>Age Brackets represented in Top 8:</b>", unsafe_allow_html=True)
-        
-        # Display as columns
+        st.write("<b>Age Brackets represented in Guaranteed Top 8:</b>", unsafe_allow_html=True)
         cols = st.columns(len(all_ages))
         for idx, age in enumerate(all_ages):
             with cols[idx]:
-                st.metric(label=f"Bracket {age}", value=age_counts[age])
+                st.metric(label=f"Bracket {age}", value=guaranteed_bracket_counts[age])
+        
+        # Remaining pool = all operational competitors not already guaranteed a seat
+        pool = df_all_ind[df_all_ind['category'].isin(['Operational Male', 'Operational Female'])].copy()
+        pool = pool[~pool['name'].isin(guaranteed_names)]
+        remaining_bracket_counts = {age: int((pool['age_group'] == age).sum()) for age in all_ages}
+        
+        # Weight each bracket by its remaining field size, reduced by how many guaranteed
+        # seats that bracket already holds (brackets already well-represented in the top 8
+        # are "negated" down, not excluded entirely, so one strong bracket can't both sweep
+        # the guaranteed 8 AND dominate the proportional 8)
+        weights = {age: max(0, remaining_bracket_counts[age] - guaranteed_bracket_counts[age]) for age in all_ages}
+        total_weight = sum(weights.values())
+        
+        TICKETS_REMAINING = 8
+        
+        if total_weight == 0 or pool.empty:
+            st.warning("No remaining eligible competitors to distribute the 8 eligible tickets across.")
+        else:
+            # Largest-remainder apportionment so whole-ticket counts sum exactly to 8
+            raw_shares = {age: (weights[age] / total_weight) * TICKETS_REMAINING for age in all_ages}
+            quota = {age: int(raw_shares[age]) for age in all_ages}
+            shortfall = TICKETS_REMAINING - sum(quota.values())
+            remainder_order = sorted(all_ages, key=lambda a: raw_shares[a] - quota[a], reverse=True)
+            for age in remainder_order[:shortfall]:
+                quota[age] += 1
+            
+            # Cap each bracket's quota at how many people are actually available in it,
+            # and hand any leftover tickets to the next highest-weighted bracket with spare capacity
+            leftover = 0
+            for age in all_ages:
+                if quota[age] > remaining_bracket_counts[age]:
+                    leftover += quota[age] - remaining_bracket_counts[age]
+                    quota[age] = remaining_bracket_counts[age]
+            while leftover > 0:
+                spare = [a for a in all_ages if quota[a] < remaining_bracket_counts[a]]
+                if not spare:
+                    break
+                spare.sort(key=lambda a: weights[a], reverse=True)
+                quota[spare[0]] += 1
+                leftover -= 1
+            
+            st.write("<b>Remaining 8 Tickets — Quota by Bracket:</b>", unsafe_allow_html=True)
+            cols2 = st.columns(len(all_ages))
+            for idx, age in enumerate(all_ages):
+                with cols2[idx]:
+                    st.metric(label=f"Bracket {age}", value=quota[age])
+            
+            # Within each bracket's quota, take the fastest remaining competitors
+            selected_parts = []
+            for age in all_ages:
+                n = quota[age]
+                if n <= 0:
+                    continue
+                bracket_pool = pool[pool['age_group'] == age].sort_values(by="final_time_sec", ascending=True)
+                selected_parts.append(bracket_pool.head(n))
+            
+            if selected_parts:
+                remaining_selection = pd.concat(selected_parts).sort_values(by="final_time_sec", ascending=True)
+                remaining_selection["Time"] = remaining_selection["final_time_sec"].apply(format_time)
+                st.write("<b>Remaining 8 Ticket Winners:</b>", unsafe_allow_html=True)
+                st.table(remaining_selection[["name", "category", "age_group", "Time"]].reset_index(drop=True))
                 
-        # Proportional remainder math
-        st.info("The remaining 8 tickets are automatically distributed based on the proportion of active registrants in each of the 7 brackets.")
+                st.markdown("---")
+                st.write("<b>🏆 Full 16-Ticket Roster (Guaranteed 8 + Proportional 8):</b>", unsafe_allow_html=True)
+                full_roster = pd.concat([top_8, remaining_selection]).sort_values(by="final_time_sec", ascending=True).copy()
+                full_roster["Time"] = full_roster["final_time_sec"].apply(format_time)
+                full_roster.index = range(1, len(full_roster) + 1)
+                st.table(full_roster[["name", "category", "age_group", "Time"]])
+            else:
+                st.warning("No competitors available to fill the remaining 8 tickets with the current data.")
 
 with tab_admin:
     st.markdown("### ⏱️ Marshal Race Time Recording")
@@ -479,6 +549,17 @@ with tab_admin:
     admin_pw = st.secrets.get("ADMIN_PASSWORD", "")
     if admin_pw and password == admin_pw:
         st.success("Access Granted. Marshal Timing Form Active.")
+        
+        # Sync health indicator — visible at all times so marshals know whether
+        # the cloud connection is currently working, without having to remember
+        # the last error message they saw.
+        last_sync = st.session_state.get('last_sync_time')
+        if not APPS_SCRIPT_URL:
+            st.warning("🔌 No Apps Script URL configured — all entries are going to local storage only, which does not survive an app restart. Paper backup required.")
+        elif last_sync is None:
+            st.info("☁️ Cloud sync status: no successful sync yet this session.")
+        else:
+            st.info(f"☁️ Last successful cloud sync: {last_sync.strftime('%H:%M:%S')}")
         
         # Initialise session state to track the active form if not present
         if 'admin_mode' not in st.session_state:
@@ -502,7 +583,7 @@ with tab_admin:
         
         if st.session_state.admin_mode == "individual":
             st.markdown("#### 🏃 Individual Competitor Entry Form")
-            st.info("💡All fields start blank and the submit button unlocks automatically once all required fields are complete💡")
+            st.info("💡 Note: Keyboard shortcut 'Enter to submit' has been removed to prevent accidental entries. All fields start blank and the submit button unlocks automatically once all required fields are complete.")
             
             name = st.text_input("Competitor Name:", value="", placeholder="Enter full name...", key="ind_name")
             station = st.selectbox("Station:", STATIONS_LIST, index=None, placeholder="Select Station...", key="ind_station")
