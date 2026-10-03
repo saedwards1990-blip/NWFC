@@ -42,6 +42,36 @@ st.set_page_config(
 )
 
 # ==========================================
+# MOBILE / ACCESSIBILITY CSS
+# ==========================================
+# Confirmed via a real phone recording (1080x2400): without this, the hero
+# title wraps across 4 lines and pushes the leaderboard off the first screen,
+# and the tab bar needs horizontal scrolling sooner than it should.
+st.markdown("""
+<style>
+/* Hero title: scales with viewport width so it stops eating the whole
+   first screen on a phone, but stays large on desktop. */
+h1 {
+    font-size: clamp(1.4rem, 5vw, 2.75rem) !important;
+    line-height: 1.2 !important;
+}
+
+/* Tighter tab labels so more of the 4-tab bar fits before it needs a
+   horizontal swipe. */
+.stTabs [data-baseweb="tab"] {
+    font-size: 0.85rem;
+    padding: 8px 10px;
+}
+
+/* Slightly smaller dataframe text buys extra columns of width before the
+   table's own horizontal scrollbar kicks in on a narrow screen. */
+[data-testid="stDataFrame"] * {
+    font-size: 13px !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ==========================================
 # CLOUD BACKEND CONFIGURATION (GOOGLE SHEETS)
 # ==========================================
 # These are read from Streamlit secrets by default and are NOT shown to public
@@ -371,11 +401,27 @@ with tab_leaderboard:
                 df_filtered["Time"] = df_filtered["final_time_sec"].apply(format_time)
                 df_filtered.index = range(1, len(df_filtered) + 1)
                 
-                # Dynamic visual columns based on selection
-                display_cols = ["name", "station", "watch", "age_group", "Time"]
+                # Dynamic visual columns based on selection. Time is placed
+                # right after the name (rather than last) so it's the first
+                # thing visible on a phone, before anyone has to scroll the
+                # table sideways past station/watch/category/age_group —
+                # confirmed via a real phone test that Time was being pushed
+                # off-screen entirely in the old column order.
+                display_cols = ["name", "Time", "age_group", "station", "watch"]
                 if "category" in df_filtered.columns and category_filter == "All Operational Staff":
-                    display_cols.insert(3, "category")
-                st.dataframe(df_filtered[display_cols], use_container_width=True)
+                    display_cols.insert(2, "category")
+                st.dataframe(
+                    df_filtered[display_cols],
+                    use_container_width=True,
+                    column_config={
+                        "name": st.column_config.TextColumn("Name", width="medium"),
+                        "Time": st.column_config.TextColumn("Time", width="small"),
+                        "category": st.column_config.TextColumn("Category", width="small"),
+                        "age_group": st.column_config.TextColumn("Age", width="small"),
+                        "station": st.column_config.TextColumn("Station", width="small"),
+                        "watch": st.column_config.TextColumn("Watch", width="small"),
+                    },
+                )
             else:
                 st.info("No runs recorded in this filtered category yet.")
         else:
@@ -400,12 +446,27 @@ with tab_leaderboard:
                 df_filtered_rel["Time"] = df_filtered_rel["final_time_sec"].apply(format_time)
                 df_filtered_rel.index = range(1, len(df_filtered_rel) + 1)
                 
-                # Professional display formatting: show Relay Team Name explicitly
+                # Professional display formatting: show Relay Team Name explicitly.
+                # Time is placed right after the team name for the same mobile
+                # reason as the individual table above — four runner-name
+                # columns would otherwise push it off-screen entirely.
                 df_display = df_filtered_rel.rename(columns={"station": "Relay Team Name"}).copy()
-                cols_to_show = ["Relay Team Name", "division", "runner_1", "runner_2", "runner_3", "runner_4", "Time"]
+                cols_to_show = ["Relay Team Name", "Time", "division", "runner_1", "runner_2", "runner_3", "runner_4"]
                 cols_to_show = [c for c in cols_to_show if c in df_display.columns]
-                
-                st.dataframe(df_display[cols_to_show], use_container_width=True)
+
+                st.dataframe(
+                    df_display[cols_to_show],
+                    use_container_width=True,
+                    column_config={
+                        "Relay Team Name": st.column_config.TextColumn("Team", width="medium"),
+                        "Time": st.column_config.TextColumn("Time", width="small"),
+                        "division": st.column_config.TextColumn("Div.", width="small"),
+                        "runner_1": st.column_config.TextColumn("Runner 1", width="small"),
+                        "runner_2": st.column_config.TextColumn("Runner 2", width="small"),
+                        "runner_3": st.column_config.TextColumn("Runner 3", width="small"),
+                        "runner_4": st.column_config.TextColumn("Runner 4", width="small"),
+                    },
+                )
             else:
                 st.info("No relay times recorded in this filtered category yet.")
         else:
