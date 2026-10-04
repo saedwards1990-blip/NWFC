@@ -38,7 +38,7 @@ def convert_to_export_url(url):
 
 st.set_page_config(
     page_title="North Wales Firefighter Challenge (NWFC)",
-    page_icon="assets/nwfrs_badge.jpg",
+    page_icon="assets/nwfrs_logo.png",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -461,7 +461,7 @@ def _load_logo_b64(path):
     with open(path, "rb") as f:
         return base64.b64encode(f.read()).decode("utf-8")
 
-_logo_b64 = _load_logo_b64("assets/nwfrs_badge.jpg")
+_logo_b64 = _load_logo_b64("assets/nwfrs_logo.png")
 
 st.markdown(f"""
 <style>
