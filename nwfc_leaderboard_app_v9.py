@@ -38,7 +38,7 @@ def convert_to_export_url(url):
 
 st.set_page_config(
     page_title="North Wales Firefighter Challenge (NWFC)",
-    page_icon="assets/nwfrs_logo.png",
+    page_icon="assets/nwfrs_badge.jpg",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -461,7 +461,7 @@ def _load_logo_b64(path):
     with open(path, "rb") as f:
         return base64.b64encode(f.read()).decode("utf-8")
 
-_logo_b64 = _load_logo_b64("assets/nwfrs_logo.png")
+_logo_b64 = _load_logo_b64("assets/nwfrs_badge.jpg")
 
 st.markdown(f"""
 <style>
@@ -500,7 +500,7 @@ st.markdown(f"""
 }}
 </style>
 <div class="nwfc-header-banner">
-    <img src="data:image/png;base64,{_logo_b64}" alt="NWFRS crest" />
+    <img src="data:image/jpeg;base64,{_logo_b64}" alt="NWFRS crest" />
     <div class="nwfc-header-text">
         <p class="nwfc-header-title">🏆 NORTH WALES FIREFIGHTER CHALLENGE (NWFC)</p>
         <p class="nwfc-header-sub">Official Live Leaderboard &amp; Ticket Selection System</p>
@@ -1034,6 +1034,12 @@ with tab_selection:
         if len(males) >= 4:
             top_m = males.head(4).copy()
             top_m["Time"] = top_m["final_time_sec"].apply(format_time)
+            # males/females keep their original row index from df_all_ind after
+            # the filter+sort above (pandas doesn't renumber on sort_values), so
+            # without this st.table shows those leftover index numbers in the
+            # first column instead of a clean 1-4 rank — same fix already
+            # applied to the two leaderboard tables above.
+            top_m.index = range(1, len(top_m) + 1)
             st.table(top_m[["name", "age_group", "Time"]])
         else:
             st.warning("Need at least 4 operational male runs to populate.")
@@ -1043,6 +1049,7 @@ with tab_selection:
         if len(females) >= 4:
             top_f = females.head(4).copy()
             top_f["Time"] = top_f["final_time_sec"].apply(format_time)
+            top_f.index = range(1, len(top_f) + 1)
             st.table(top_f[["name", "age_group", "Time"]])
         else:
             st.warning("Need at least 4 operational female runs to populate.")
