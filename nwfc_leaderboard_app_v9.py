@@ -37,6 +37,7 @@ def convert_to_export_url(url):
 
 st.set_page_config(
     page_title="North Wales Firefighter Challenge (NWFC)",
+    page_icon="assets/nwfrs_logo.png",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -350,8 +351,16 @@ def write_relay_run(team_name, division, r1, r2, r3, r4, raw_time, penalties, fi
     return True
 
 
-st.title("🏆 NORTH WALES FIREFIGHTER CHALLENGE (NWFC)")
-st.subheader("Official Live Leaderboard & Ticket Selection System")
+logo_col, title_col = st.columns([1, 6])
+with logo_col:
+    # Fixed pixel width rather than use_container_width — on a phone the
+    # columns above stack vertically, and a container-width 1024x1024 logo
+    # would then fill the full screen width, recreating the same
+    # "giant image eats the first screen" problem fixed for the title above.
+    st.image("assets/nwfrs_logo.png", width=90)
+with title_col:
+    st.title("🏆 NORTH WALES FIREFIGHTER CHALLENGE (NWFC)")
+    st.subheader("Official Live Leaderboard & Ticket Selection System")
 
 # Tab Layout
 tab_leaderboard, tab_selection, tab_admin, tab_course = st.tabs([
@@ -726,13 +735,14 @@ with tab_admin:
             
             st.markdown("##### ⚠️ Rule Violations & Penalties")
             penalties = 0
-            if st.checkbox("Dropped Cleveland Hose Pack (+10s)", key="ind_p1"): penalties += 10
+            if st.checkbox("Dropped Cleveland Hose Pack / Incorrect Placement (+5s)", key="ind_p1"): penalties += 5
             if st.checkbox("Improper RTC Tool Table Placement (+5s per tool)", key="ind_p2"): penalties += 5
-            if st.checkbox("Improper Forcible Entry Sledge Technique (+10s)", key="ind_p3"): penalties += 10
-            if st.checkbox("Missed 50m Hose Drag Marker (+15s)", key="ind_p4"): penalties += 15
+            if st.checkbox("Improper Forcible Entry Sledge Technique — 2nd warning is a penalty (+10s)", key="ind_p3"): penalties += 10
+            if st.checkbox("Multiple Improper Forcible Entry Machine Warnings — told to stop and move to next station (+30s)", key="ind_p3b"): penalties += 30
+            if st.checkbox("Missed 35m Hose Drag Marker (+10s)", key="ind_p4"): penalties += 10
             if st.checkbox("Hose Makeup Box Overflow Boundary (+10s)", key="ind_p5"): penalties += 10
-            if st.checkbox("Foam Containers Slid or Thrown (+10s)", key="ind_p6"): penalties += 10
-            if st.checkbox("Dummy Head / Face Drag Warning (+15s)", key="ind_p7"): penalties += 15
+            if st.checkbox("Foam Containers Slid / Thrown / Not Seated Correctly Within Tray (+10s)", key="ind_p6"): penalties += 10
+            if st.checkbox("Dummy Head / Face Drag or Feet Lifted off Ground — 1st warning, 2nd warning is a penalty (+15s)", key="ind_p7"): penalties += 15
             
             # Validation check
             ind_time_valid = (mins is not None or secs is not None) and ((mins or 0) * 60 + (secs or 0.0) > 0)
@@ -777,13 +787,14 @@ with tab_admin:
             
             st.markdown("##### ⚠️ Rule Violations & Penalties")
             penalties = 0
-            if st.checkbox("Dropped Cleveland Hose Pack (+10s)", key="rel_p1"): penalties += 10
+            if st.checkbox("Dropped Cleveland Hose Pack / Incorrect Placement (+5s)", key="rel_p1"): penalties += 5
             if st.checkbox("Improper RTC Tool Table Placement (+5s per tool)", key="rel_p2"): penalties += 5
-            if st.checkbox("Improper Forcible Entry Sledge Technique (+10s)", key="rel_p3"): penalties += 10
-            if st.checkbox("Missed 50m Hose Drag Marker (+15s)", key="rel_p4"): penalties += 15
+            if st.checkbox("Improper Forcible Entry Sledge Technique — 2nd warning is a penalty (+10s)", key="rel_p3"): penalties += 10
+            if st.checkbox("Multiple Improper Forcible Entry Machine Warnings — told to stop and move to next station (+30s)", key="rel_p3b"): penalties += 30
+            if st.checkbox("Missed 35m Hose Drag Marker (+10s)", key="rel_p4"): penalties += 10
             if st.checkbox("Hose Makeup Box Overflow Boundary (+10s)", key="rel_p5"): penalties += 10
-            if st.checkbox("Foam Containers Slid or Thrown (+10s)", key="rel_p6"): penalties += 10
-            if st.checkbox("Dummy Head / Face Drag Warning (+15s)", key="rel_p7"): penalties += 15
+            if st.checkbox("Foam Containers Slid / Thrown / Not Seated Correctly Within Tray (+10s)", key="rel_p6"): penalties += 10
+            if st.checkbox("Dummy Head / Face Drag or Feet Lifted off Ground — 1st warning, 2nd warning is a penalty (+15s)", key="rel_p7"): penalties += 15
             if st.checkbox("Relay Touch-Tag missed or out of zone (+10s)", key="rel_p8"): penalties += 10
             if st.checkbox("Dummy drag boundary lane crossing (+15s)", key="rel_p9"): penalties += 15
             
@@ -863,64 +874,75 @@ with tab_course:
 
         # Paste a video URL per station as footage becomes available.
         STATION_VIDEOS = {
-            "hose_drag": "",
-            "rtc_tools": "",
+            "shuttle": "",
+            "cleveland_carry": "",
+            "rtc_carry": "",
             "force_machine": "",
-            "dummy_drag": "",
-            "hose_lay": "",
-            "containers": "",
+            "hose_drag": "",
             "hose_makeup": "",
+            "containers": "",
+            "dummy_drag": "",
         }
 
         stations = [
             {
-                "key": "hose_drag",
-                "title": "1. Hose Drag",
-                "desc": "[Describe the required technique for dragging the coiled hose from the Start marker.]",
-                "acceptable": "[State what counts as a clean drag vs a faulted one.]",
-                "penalty": "Missed 50m Hose Drag Marker — +15s",
+                "key": "shuttle",
+                "title": "1. 35m Shuttle",
+                "desc": "[Describe the required technique for the 35m shuttle run.]",
+                "acceptable": "[State what counts as a clean run vs a faulted one.]",
+                "penalty": "No dedicated penalty code for this station — see Rules & Penalties for anything that applies here.",
             },
             {
-                "key": "rtc_tools",
-                "title": "2. RTC Tool Table",
-                "desc": "[Describe how tools must be placed on the RTC Tool Table.]",
+                "key": "cleveland_carry",
+                "title": "2. 30m Cleveland Roll Carry",
+                "desc": "[Describe the required technique for carrying the Cleveland hose roll over 30m.]",
+                "acceptable": "[State what counts as a dropped pack vs a secure carry.]",
+                "penalty": "Dropped Cleveland Hose Pack — +5s",
+            },
+            {
+                "key": "rtc_carry",
+                "title": "3. RTC Tool Carry",
+                "desc": "[Describe how tools must be carried and placed on the RTC Tool Table.]",
                 "acceptable": "[State correct placement vs incorrect placement.]",
                 "penalty": "Improper RTC Tool Table Placement — +5s per tool",
             },
             {
                 "key": "force_machine",
-                "title": "3. Corhaven Force Machine",
-                "desc": "[Describe the required forcible entry sledge technique at the Hammer Placement Mat / Corhaven Force Machine.]",
-                "acceptable": "[State correct technique vs incorrect technique.]",
-                "penalty": "Improper Forcible Entry Sledge Technique — +10s",
+                "title": "4. Corhaven Force Entry Machine",
+                "desc": "[Describe the required forcible entry sledge technique at the Corhaven Force Entry Machine.]",
+                "acceptable": "[State correct technique vs incorrect technique, and what counts as a 1st vs 2nd warning.]",
+                "penalty": "Improper Forcible Entry Sledge Technique (2nd warning is a penalty) — +10s. "
+                           "Multiple improper warnings — competitor is told to stop and move to the next station — +30s.",
             },
             {
-                "key": "dummy_drag",
-                "title": "4. Dummy Rescue Drag",
-                "desc": "[Describe the required technique for moving the 70kg dummy across the Crash Mat to the Finish.]",
-                "acceptable": "[State what triggers a head/face drag warning.]",
-                "penalty": "Dummy Head / Face Drag Warning — +15s",
-            },
-            {
-                "key": "hose_lay",
-                "title": "5. 70mm Layflat Hose Lay (25m)",
-                "desc": "[Describe how the hose must be run out along this 25m section.]",
-                "acceptable": "[State correct vs incorrect hose lay technique.]",
-                "penalty": "See Hose Makeup Box penalty below for the return leg.",
-            },
-            {
-                "key": "containers",
-                "title": "6. 4x Containers Carry (20kg/20L each)",
-                "desc": "[Describe how the four containers must be carried from the Container Tray.]",
-                "acceptable": "[State that containers must not be thrown, slid, or dropped outside the tray.]",
-                "penalty": "Foam Containers Slid or Thrown — +10s",
+                "key": "hose_drag",
+                "title": "5. 35m Hose Drag",
+                "desc": "[Describe the required technique for the 35m hose drag.]",
+                "acceptable": "[State what counts as a clean drag vs a missed marker.]",
+                "penalty": "Missed 35m Hose Drag Marker — +10s",
             },
             {
                 "key": "hose_makeup",
-                "title": "7. Hose Makeup Box",
-                "desc": "[Describe how the hose must be made up (coiled/packed) back into the Lay Flat Hose Box.]",
+                "title": "6. 25m Hose Make Up (Rolled Hose Carry for Non-Ops)",
+                "desc": "[Describe how the hose must be made up (coiled/packed) within 25m. Non-Operational competitors "
+                        "instead carry a rolled hose — describe that variant too.]",
                 "acceptable": "[State the marked boundary the hose must stay within.]",
                 "penalty": "Hose Makeup Box Overflow Boundary — +10s",
+            },
+            {
+                "key": "containers",
+                "title": "7. 4x 20kg Container Carry",
+                "desc": "[Describe how the four 20kg containers must be carried from the Container Tray.]",
+                "acceptable": "[State that containers must not be thrown, slid, or seated incorrectly within the tray.]",
+                "penalty": "Foam Containers Slid / Thrown / Not Seated Correctly Within Tray — +10s",
+            },
+            {
+                "key": "dummy_drag",
+                "title": "8. 50m Dummy Drag / Casualty Rescue (70kg Operational / 50kg Non-Ops)",
+                "desc": "[Describe the required technique for the 50m dummy drag/casualty rescue. Dummy weight is 70kg for "
+                        "Operational competitors and 50kg for Non-Operational competitors.]",
+                "acceptable": "[State what triggers a 1st warning vs a 2nd-warning penalty for a head/face drag.]",
+                "penalty": "Dummy Head / Face Drag (1st warning, 2nd warning is a penalty) — +15s",
             },
         ]
 
@@ -996,13 +1018,14 @@ with tab_course:
         st.markdown("#### Full Rules & Penalties Reference")
         st.write("The following penalties apply to both individual and relay entries:")
         common_penalties = pd.DataFrame([
-            ("Dropped Cleveland Hose Pack", "+10s"),
+            ("Dropped Cleveland Hose Pack / Incorrect Placement", "+5s"),
             ("Improper RTC Tool Table Placement", "+5s per tool"),
-            ("Improper Forcible Entry Sledge Technique", "+10s"),
-            ("Missed 50m Hose Drag Marker", "+15s"),
+            ("Improper Forcible Entry Sledge Technique (2nd warning is a penalty)", "+10s"),
+            ("Multiple Improper Forcible Entry Machine Warnings (told to stop and move to next station)", "+30s"),
+            ("Missed 35m Hose Drag Marker", "+10s"),
             ("Hose Makeup Box Overflow Boundary", "+10s"),
-            ("Foam Containers Slid or Thrown", "+10s"),
-            ("Dummy Head / Face Drag Warning", "+15s"),
+            ("Foam Containers Slid / Thrown / Not Seated Correctly Within Tray", "+10s"),
+            ("Dummy Head / Face Drag or Feet Lifted Off Ground (1st warning, 2nd warning is a penalty)", "+15s"),
         ], columns=["Violation", "Penalty"])
         st.table(common_penalties)
 
