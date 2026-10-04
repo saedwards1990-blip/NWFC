@@ -107,10 +107,106 @@ STATIONS_LIST = [
 # Master watch and departments list (including newly requested sectors and watches)
 WATCHES_LIST = [
     "Red", "Green", "Blue", "White", "Nucleus", "RDS", "Rural",
-    "Transformation", "Officers", "Training", "Prevention", "HR", "Fleet", 
-    "Corporate Comms", "Technical Ops", "Facilities", "ICT", "Finance", 
+    "Transformation", "Officers", "Training", "Prevention", "HR", "Fleet",
+    "Corporate Comms", "Technical Ops", "Facilities", "ICT", "Finance",
     "Response", "Control", "Other"
 ]
+
+# ==========================================================================
+# SINGLE SOURCE OF TRUTH — course stations and penalties.
+#
+# Every place that used to repeat this content by hand — the Marshal entry-
+# form checkboxes, the public Rules & Penalties table, the Station-by-
+# Station Guide's per-station penalty text, and the printable PDF forms
+# further down — now reads from these two lists instead. That exists
+# because the old hand-maintained copies drifted: a wording change was
+# made to the entry forms and the Rules table but missed the Station Guide.
+# Change a penalty or a station here once; every surface below updates.
+# ==========================================================================
+COURSE_STATIONS = [
+    {
+        "key": "shuttle",
+        "title": "1. 35m Shuttle",
+        "desc": "[Describe the required technique for the 35m shuttle run.]",
+        "acceptable": "[State what counts as a clean run vs a faulted one.]",
+    },
+    {
+        "key": "cleveland_carry",
+        "title": "2. 30m Cleveland Roll Carry",
+        "desc": "[Describe the required technique for carrying the Cleveland hose roll over 30m.]",
+        "acceptable": "[State what counts as a dropped pack vs a secure carry, and what counts as incorrect placement.]",
+    },
+    {
+        "key": "rtc_carry",
+        "title": "3. RTC Tool Carry",
+        "desc": "[Describe how tools must be carried and placed on the RTC Tool Table.]",
+        "acceptable": "[State correct placement vs incorrect placement.]",
+    },
+    {
+        "key": "force_machine",
+        "title": "4. Corhaven Force Entry Machine",
+        "desc": "[Describe the required forcible entry sledge technique at the Corhaven Force Entry Machine.]",
+        "acceptable": "[State correct technique vs incorrect technique, and what counts as a 1st vs 2nd warning.]",
+    },
+    {
+        "key": "hose_drag",
+        "title": "5. 35m Hose Drag",
+        "desc": "[Describe the required technique for the 35m hose drag.]",
+        "acceptable": "[State what counts as a clean drag vs a missed marker.]",
+    },
+    {
+        "key": "hose_makeup",
+        "title": "6. 25m Hose Make Up (Rolled Hose Carry for Non-Ops)",
+        "desc": "[Describe how the hose must be made up (coiled/packed) within 25m. Non-Operational competitors "
+                "instead carry a rolled hose — describe that variant too.]",
+        "acceptable": "[State the marked boundary the hose must stay within.]",
+    },
+    {
+        "key": "containers",
+        "title": "7. 4x 20kg Container Carry",
+        "desc": "[Describe how the four 20kg containers must be carried from the Container Tray.]",
+        "acceptable": "[State that containers must not be thrown, slid, or seated incorrectly within the tray.]",
+    },
+    {
+        "key": "dummy_drag",
+        "title": "8. 50m Dummy Drag / Casualty Rescue (70kg Operational / 50kg Non-Ops)",
+        "desc": "[Describe the required technique for the 50m dummy drag/casualty rescue. Dummy weight is 70kg for "
+                "Operational competitors and 50kg for Non-Operational competitors.]",
+        "acceptable": "[State what triggers a 1st warning vs a 2nd-warning penalty for a head/face drag or for "
+                       "feet lifted off the ground.]",
+    },
+]
+
+PENALTIES = [
+    {"code": "P1", "desc": "Dropped Cleveland Hose Pack / Incorrect Placement", "pts": 5, "label": "+5s",
+     "station_key": "cleveland_carry", "relay_only": False},
+    {"code": "P2", "desc": "Improper RTC Tool Table Placement", "pts": 5, "label": "+5s per tool",
+     "station_key": "rtc_carry", "relay_only": False},
+    {"code": "P3", "desc": "Improper Forcible Entry Sledge Technique (2nd warning is a penalty)", "pts": 10,
+     "label": "+10s", "station_key": "force_machine", "relay_only": False},
+    {"code": "P4", "desc": "Multiple Improper Forcible Entry Machine Warnings (told to stop and move to next station)",
+     "pts": 30, "label": "+30s", "station_key": "force_machine", "relay_only": False},
+    {"code": "P5", "desc": "Missed 35m Hose Drag Marker", "pts": 10, "label": "+10s",
+     "station_key": "hose_drag", "relay_only": False},
+    {"code": "P6", "desc": "Hose Makeup Box Overflow Boundary", "pts": 10, "label": "+10s",
+     "station_key": "hose_makeup", "relay_only": False},
+    {"code": "P7", "desc": "Foam Containers Slid / Thrown / Not Seated Correctly Within Tray", "pts": 10,
+     "label": "+10s", "station_key": "containers", "relay_only": False},
+    {"code": "P8", "desc": "Dummy Head / Face Drag or Feet Lifted Off Ground (1st warning, 2nd warning is a penalty)",
+     "pts": 15, "label": "+15s", "station_key": "dummy_drag", "relay_only": False},
+    {"code": "P9", "desc": "Relay Touch-Tag Missed or Out of Zone", "pts": 10, "label": "+10s",
+     "station_key": None, "relay_only": True},
+    {"code": "P10", "desc": "Dummy Drag Boundary Lane Crossing", "pts": 15, "label": "+15s",
+     "station_key": "dummy_drag", "relay_only": True},
+]
+
+
+def station_penalty_text(station_key):
+    """Builds the Station Guide's 'Penalty if breached' line straight from PENALTIES."""
+    matches = [p for p in PENALTIES if p["station_key"] == station_key and not p["relay_only"]]
+    if not matches:
+        return "No dedicated penalty code for this station — see Rules & Penalties for anything that applies here."
+    return " ".join(f"{p['desc']} — {p['label']}." for p in matches)
 
 # Local SQLite fallback initialisation
 def init_local_db():
@@ -361,6 +457,387 @@ with logo_col:
 with title_col:
     st.title("🏆 NORTH WALES FIREFIGHTER CHALLENGE (NWFC)")
     st.subheader("Official Live Leaderboard & Ticket Selection System")
+
+# ==========================================================================
+# PRINTABLE PDF GENERATION — paper backup forms & marshal observation sheets.
+#
+# Reads from the PENALTIES / COURSE_STATIONS lists defined above, so a
+# change made there is reflected the next time a marshal downloads one of
+# these from the Marshal Timer & Admin tab — there is no separate script
+# to remember to re-run. reportlab is imported lazily inside these
+# functions: if it's ever missing from the deployed environment, the rest
+# of the app (leaderboard, ticket selection, entry forms) keeps working and
+# only the download buttons show an error.
+# ==========================================================================
+AGE_BRACKETS_PDF = ['18-29', '30-34', '35-39', '40-44', '45-49', '50-54', '55+']
+
+
+def _pdf_styles():
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    base = getSampleStyleSheet()
+    return {
+        "title": ParagraphStyle('TitleNWFC', parent=base['Title'], fontSize=15, spaceAfter=2),
+        "sub": ParagraphStyle('SubNWFC', parent=base['Normal'], fontSize=10,
+                               textColor=colors.HexColor("#444444"), spaceAfter=6),
+        "small": ParagraphStyle('SmallNWFC', parent=base['Normal'], fontSize=8.5, leading=11),
+        "note": ParagraphStyle('NoteNWFC', parent=base['Normal'], fontSize=8,
+                                textColor=colors.HexColor("#555555"), leading=10),
+        "legend": ParagraphStyle('LegendNWFC', parent=base['Normal'], fontSize=8, leading=11),
+        "cell": ParagraphStyle('CellNWFC', parent=base['Normal'], fontSize=8, leading=9.5),
+        "h2": ParagraphStyle('H2NWFC', parent=base['Heading2'], fontSize=12, spaceBefore=6, spaceAfter=4),
+    }
+
+
+def _pdf_header_block(sty, subtitle_html, col_widths):
+    from reportlab.lib.units import mm
+    from reportlab.platypus import Table, TableStyle, Paragraph, Image
+    logo = Image("assets/nwfrs_logo.png", width=18 * mm, height=18 * mm)
+    text_cell = [
+        Paragraph("NORTH WALES FIREFIGHTER CHALLENGE (NWFC)", sty["title"]),
+        Paragraph(subtitle_html, sty["sub"]),
+    ]
+    t = Table([[logo, text_cell]], colWidths=col_widths)
+    t.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    return t
+
+
+def _pdf_penalty_legend_table(sty, penalty_rows, col_widths):
+    from reportlab.lib import colors
+    from reportlab.platypus import Table, TableStyle, Paragraph
+    data = [["Code", "Violation", "Penalty"]]
+    for code, desc, label in penalty_rows:
+        # Wrapped in a Paragraph so long violation text wraps within the column
+        # instead of overflowing into the one next to it — plain strings in a
+        # reportlab Table don't wrap on their own.
+        data.append([code, Paragraph(desc, sty["cell"]), label])
+    t = Table(data, colWidths=col_widths)
+    t.setStyle(TableStyle([
+        ('FONTSIZE', (0, 0), (-1, -1), 8),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#f0f0f0")),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+    ]))
+    return t
+
+
+def _pdf_tally_table(sty, penalty_rows):
+    from reportlab.lib import colors
+    from reportlab.lib.units import mm
+    from reportlab.platypus import Table, TableStyle, Paragraph
+    header = ["Code", "Possible Penalty", "Pts", "Tally (tick each occurrence)", "Count", "Subtotal (s)"]
+    data = [header]
+    for code, desc, label in penalty_rows:
+        data.append([code, Paragraph(desc, sty["cell"]), label, "", "", ""])
+    t = Table(data, colWidths=[12 * mm, 70 * mm, 18 * mm, 37 * mm, 16 * mm, 24 * mm], repeatRows=1)
+    t.setStyle(TableStyle([
+        ('FONTSIZE', (0, 0), (-1, -1), 8),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#2c3e50")),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('ALIGN', (1, 1), (1, -1), 'LEFT'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('GRID', (0, 0), (-1, -1), 0.6, colors.grey),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor("#f7f7f7")]),
+        ('TOPPADDING', (0, 1), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+    ]))
+    return t
+
+
+def _pdf_signoff_block():
+    from reportlab.lib import colors
+    from reportlab.lib.units import mm
+    from reportlab.platypus import Table, TableStyle
+    data = [
+        ["Total Penalty Time (sum of Subtotal column):", "______________ seconds"],
+        ["Official Stopwatch Time:", "Min ______  Sec.ms ______"],
+        ["FINAL TIME (Stopwatch + Total Penalties):", "______________"],
+    ]
+    t = Table(data, colWidths=[95 * mm, 90 * mm])
+    t.setStyle(TableStyle([
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('FONTNAME', (-1, -1), (-1, -1), 'Helvetica-Bold'),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        ('TOPPADDING', (0, 0), (-1, -1), 8),
+        ('LINEBELOW', (0, 0), (-1, -2), 0.4, colors.grey),
+        ('BOX', (0, 0), (-1, -1), 0.8, colors.black),
+    ]))
+    return t
+
+
+def _pdf_signature_block(rep_label="Competitor"):
+    from reportlab.lib import colors
+    from reportlab.lib.units import mm
+    from reportlab.platypus import Table, TableStyle
+    data = [
+        ["Marshal / Referee Name (print):", "_____________________________"],
+        ["Marshal / Referee Signature:", "_____________________________"],
+        [f"{rep_label} Signature\n(confirms agreement with time & penalties above):", "_____________________________"],
+        ["Date / Time:", "_____________________________"],
+    ]
+    t = Table(data, colWidths=[95 * mm, 90 * mm])
+    t.setStyle(TableStyle([
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
+        ('LINEBELOW', (0, 0), (-1, -2), 0.4, colors.grey),
+    ]))
+    return t
+
+
+def _chunk_list_to_text(items, per_line=9):
+    lines = []
+    for i in range(0, len(items), per_line):
+        lines.append(", ".join(items[i:i + per_line]))
+    return "<br/>".join(lines)
+
+
+def build_paper_forms_pdf():
+    from reportlab.lib.pagesizes import landscape, A4
+    from reportlab.lib.units import mm
+    from reportlab.lib import colors
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+
+    sty = _pdf_styles()
+    station_order_text = "  →  ".join(s["title"] for s in COURSE_STATIONS)
+    ind_rows = [(p["code"], p["desc"], p["label"]) for p in PENALTIES if not p["relay_only"]]
+    rel_rows = ind_rows + [(p["code"], p["desc"], p["label"]) for p in PENALTIES if p["relay_only"]]
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=landscape(A4),
+        topMargin=12 * mm, bottomMargin=12 * mm, leftMargin=10 * mm, rightMargin=10 * mm,
+    )
+    story = []
+
+    # ---- Page 1: Individual Entry Log (front) ----
+    story.append(_pdf_header_block(
+        sty,
+        "PAPER BACKUP — Individual Competitor Log &nbsp;|&nbsp; "
+        "Station: ____________________ &nbsp;&nbsp; Date: ____________ &nbsp;&nbsp; "
+        "Marshal: ____________________ &nbsp;&nbsp; Sheet # ______",
+        [24 * mm, 253 * mm],
+    ))
+    story.append(Spacer(1, 4))
+    story.append(Paragraph(
+        "Fill in every column exactly as it would be entered on the web app. If the app or Wi-Fi is down, "
+        "complete this sheet in full and upload/sync the entries once the system is back online. "
+        "Reference codes (stations, watches, penalty codes) are printed on the reverse of this sheet.",
+        sty["small"],
+    ))
+    story.append(Spacer(1, 6))
+
+    headers = ["#", "Competitor Name", "Station", "Watch/Dept", "Cat.\n(OM/OF/NO)", "Age\nBracket",
+               "Min", "Sec.ms", "Penalty\nCodes", "Final\nTime", "Marshal\nInitials"]
+    col_widths = [8 * mm, 48 * mm, 32 * mm, 30 * mm, 22 * mm, 20 * mm,
+                  14 * mm, 20 * mm, 26 * mm, 24 * mm, 22 * mm]
+    data = [headers] + [[str(i), "", "", "", "", "", "", "", "", "", ""] for i in range(1, 16)]
+    t = Table(data, colWidths=col_widths, repeatRows=1)
+    t.setStyle(TableStyle([
+        ('FONTSIZE', (0, 0), (-1, -1), 8),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#2c3e50")),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('GRID', (0, 0), (-1, -1), 0.6, colors.grey),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor("#f7f7f7")]),
+        ('TOPPADDING', (0, 1), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+    ]))
+    story.append(t)
+
+    # ---- Page 2: Individual reference codes (back) ----
+    story.append(PageBreak())
+    story.append(Paragraph("NWFC — Individual Log — Reference Codes (print on reverse of entry sheet)", sty["h2"]))
+    story.append(Paragraph(
+        "Category codes: OM = Operational Male &nbsp;|&nbsp; OF = Operational Female &nbsp;|&nbsp; "
+        "NO = Non-Operational", sty["legend"]
+    ))
+    story.append(Paragraph("Age Brackets: " + ", ".join(AGE_BRACKETS_PDF), sty["legend"]))
+    story.append(Spacer(1, 4))
+    story.append(Paragraph("<b>Course Station Order:</b> " + station_order_text, sty["legend"]))
+    story.append(Spacer(1, 4))
+    story.append(Paragraph("<b>Penalty Codes (write applicable codes in the Penalty Codes column):</b>", sty["legend"]))
+    story.append(_pdf_penalty_legend_table(sty, ind_rows, [16 * mm, 110 * mm, 28 * mm]))
+    story.append(Spacer(1, 6))
+    story.append(Paragraph("<b>Service Stations:</b> " + _chunk_list_to_text(STATIONS_LIST, per_line=9), sty["legend"]))
+    story.append(Spacer(1, 3))
+    story.append(Paragraph("<b>Watch / Dept / Sector:</b> " + _chunk_list_to_text(WATCHES_LIST, per_line=9), sty["legend"]))
+
+    story.append(PageBreak())
+
+    # ---- Page 3: Relay Entry Log (front) ----
+    story.append(_pdf_header_block(
+        sty,
+        "PAPER BACKUP — Relay Team Log &nbsp;|&nbsp; "
+        "Station: ____________________ &nbsp;&nbsp; Date: ____________ &nbsp;&nbsp; "
+        "Marshal: ____________________ &nbsp;&nbsp; Sheet # ______",
+        [24 * mm, 253 * mm],
+    ))
+    story.append(Spacer(1, 4))
+    story.append(Paragraph(
+        "Fill in every column exactly as it would be entered on the web app. If the app or Wi-Fi is down, "
+        "complete this sheet in full and upload/sync the entries once the system is back online. "
+        "Reference codes are printed on the reverse of this sheet.",
+        sty["small"],
+    ))
+    story.append(Spacer(1, 6))
+
+    rel_headers = ["#", "Relay Team\nName", "Division\n(M/F/Mixed)", "Runner 1", "Runner 2", "Runner 3", "Runner 4",
+                   "Min", "Sec.ms", "Penalty\nCodes", "Final\nTime", "Marshal\nInitials"]
+    rel_col_widths = [8 * mm, 30 * mm, 20 * mm, 28 * mm, 28 * mm, 28 * mm, 28 * mm,
+                       12 * mm, 18 * mm, 24 * mm, 22 * mm, 20 * mm]
+    rel_data = [rel_headers] + [[str(i)] + [""] * 11 for i in range(1, 12)]
+    rt = Table(rel_data, colWidths=rel_col_widths, repeatRows=1)
+    rt.setStyle(TableStyle([
+        ('FONTSIZE', (0, 0), (-1, -1), 8),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#2c3e50")),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('GRID', (0, 0), (-1, -1), 0.6, colors.grey),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor("#f7f7f7")]),
+        ('TOPPADDING', (0, 1), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+    ]))
+    story.append(rt)
+
+    # ---- Page 4: Relay reference codes (back) ----
+    story.append(PageBreak())
+    story.append(Paragraph("NWFC — Relay Log — Reference Codes (print on reverse of entry sheet)", sty["h2"]))
+    story.append(Paragraph("Division: Male / Female / Mixed", sty["legend"]))
+    story.append(Spacer(1, 4))
+    story.append(Paragraph("<b>Course Station Order:</b> " + station_order_text, sty["legend"]))
+    story.append(Spacer(1, 4))
+    story.append(Paragraph("<b>Penalty Codes (write applicable codes in the Penalty Codes column):</b>", sty["legend"]))
+    story.append(_pdf_penalty_legend_table(sty, rel_rows, [16 * mm, 110 * mm, 28 * mm]))
+
+    doc.build(story)
+    buf.seek(0)
+    return buf.getvalue()
+
+
+def build_observation_sheets_pdf():
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import mm
+    from reportlab.lib import colors
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+
+    sty = _pdf_styles()
+    station_order_text = "  →  ".join(s["title"] for s in COURSE_STATIONS)
+    ind_penalties = [(p["code"], p["desc"], p["label"]) for p in PENALTIES if not p["relay_only"]]
+    rel_penalties = ind_penalties + [(p["code"], p["desc"], p["label"]) for p in PENALTIES if p["relay_only"]]
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=A4,
+        topMargin=14 * mm, bottomMargin=14 * mm, leftMargin=16 * mm, rightMargin=16 * mm,
+    )
+    story = []
+
+    # ---- Individual Observation Sheet ----
+    story.append(_pdf_header_block(
+        sty, "Marshal Observation &amp; Penalty Sheet — Individual (one sheet per competitor run)",
+        [22 * mm, 156 * mm],
+    ))
+    story.append(Spacer(1, 4))
+
+    id_data = [
+        ["Competitor Name:", "_____________________________", "Competitor No. (optional):", "____________"],
+        ["Station:", "_____________________________", "Watch / Dept:", "____________________"],
+        ["Age Bracket (circle one):", "  ".join(AGE_BRACKETS_PDF), "", ""],
+        ["Category:", "Operational Male   /   Operational Female   /   Non-Operational", "", ""],
+    ]
+    id_table = Table(id_data, colWidths=[38 * mm, 78 * mm, 38 * mm, 36 * mm])
+    id_table.setStyle(TableStyle([
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
+        ('SPAN', (1, 2), (3, 2)),
+        ('SPAN', (1, 3), (3, 3)),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('BOX', (0, 0), (-1, -1), 0.8, colors.black),
+        ('INNERGRID', (0, 0), (-1, -1), 0.4, colors.grey),
+    ]))
+    story.append(id_table)
+    story.append(Spacer(1, 6))
+
+    story.append(Paragraph("Course order: " + station_order_text, sty["note"]))
+    story.append(Spacer(1, 4))
+    story.append(Paragraph(
+        "The observing marshal ticks a box in the Tally column each time a penalty is committed during the run. "
+        "Multiple occurrences (e.g. RTC tools) get multiple ticks in the same row.",
+        sty["note"],
+    ))
+    story.append(Spacer(1, 4))
+    story.append(_pdf_tally_table(sty, ind_penalties))
+    story.append(Spacer(1, 6))
+    story.append(_pdf_signoff_block())
+    story.append(Spacer(1, 6))
+    story.append(_pdf_signature_block(rep_label="Competitor"))
+
+    story.append(PageBreak())
+
+    # ---- Relay Observation Sheet ----
+    story.append(_pdf_header_block(
+        sty, "Marshal Observation &amp; Penalty Sheet — Relay Team (one sheet per team run)",
+        [22 * mm, 156 * mm],
+    ))
+    story.append(Spacer(1, 4))
+
+    rel_id_data = [
+        ["Relay Team Name:", "_____________________________", "Division:", "Male / Female / Mixed"],
+        ["Runner 1:", "_____________________", "Runner 2:", "_____________________"],
+        ["Runner 3:", "_____________________", "Runner 4:", "_____________________"],
+        ["Station:", "_____________________", "Competitor No. (optional):", "____________"],
+    ]
+    rel_id_table = Table(rel_id_data, colWidths=[30 * mm, 68 * mm, 44 * mm, 48 * mm])
+    rel_id_table.setStyle(TableStyle([
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('BOX', (0, 0), (-1, -1), 0.8, colors.black),
+        ('INNERGRID', (0, 0), (-1, -1), 0.4, colors.grey),
+    ]))
+    story.append(rel_id_table)
+    story.append(Spacer(1, 6))
+
+    story.append(Paragraph("Course order: " + station_order_text, sty["note"]))
+    story.append(Spacer(1, 4))
+    story.append(Paragraph(
+        "The observing marshal ticks a box in the Tally column each time a penalty is committed during the run. "
+        "Multiple occurrences get multiple ticks in the same row.",
+        sty["note"],
+    ))
+    story.append(Spacer(1, 4))
+    story.append(_pdf_tally_table(sty, rel_penalties))
+    story.append(Spacer(1, 6))
+    story.append(_pdf_signoff_block())
+    story.append(Spacer(1, 6))
+    story.append(_pdf_signature_block(rep_label="Team Representative"))
+
+    doc.build(story)
+    buf.seek(0)
+    return buf.getvalue()
+
 
 # Tab Layout
 tab_leaderboard, tab_selection, tab_admin, tab_course = st.tabs([
@@ -625,6 +1102,38 @@ with tab_admin:
         else:
             st.info(f"☁️ Last successful cloud sync: {last_sync.strftime('%H:%M:%S')}")
 
+        # Printable paper backups — generated on demand from the same PENALTIES /
+        # COURSE_STATIONS lists the rest of this app uses, so what a marshal prints
+        # today always matches what's live in the app right now.
+        with st.expander("🖨️ Printable Backup Documents (Marshal Only)"):
+            st.caption(
+                "These PDFs are built fresh from this app's own penalty and station list each time you "
+                "download, so they can't go out of date the way a separately-maintained file could."
+            )
+            try:
+                st.download_button(
+                    "📄 Download Paper Backup Forms (Individual + Relay log sheets)",
+                    data=build_paper_forms_pdf(),
+                    file_name="NWFC_Paper_Backup_Forms.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                    key="dl_paper_forms",
+                )
+            except Exception as e:
+                st.error(f"Could not generate Paper Backup Forms PDF: {e}")
+
+            try:
+                st.download_button(
+                    "📄 Download Marshal Observation & Penalty Sheets",
+                    data=build_observation_sheets_pdf(),
+                    file_name="NWFC_Marshal_Observation_Sheets.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                    key="dl_observation_sheets",
+                )
+            except Exception as e:
+                st.error(f"Could not generate Marshal Observation Sheets PDF: {e}")
+
         # Cloud backend configuration — marshal-only. These fields are pre-filled
         # from Streamlit secrets and normally never need touching; they're here
         # purely as a manual override for the current browser session, kept out
@@ -735,14 +1244,11 @@ with tab_admin:
             
             st.markdown("##### ⚠️ Rule Violations & Penalties")
             penalties = 0
-            if st.checkbox("Dropped Cleveland Hose Pack / Incorrect Placement (+5s)", key="ind_p1"): penalties += 5
-            if st.checkbox("Improper RTC Tool Table Placement (+5s per tool)", key="ind_p2"): penalties += 5
-            if st.checkbox("Improper Forcible Entry Sledge Technique — 2nd warning is a penalty (+10s)", key="ind_p3"): penalties += 10
-            if st.checkbox("Multiple Improper Forcible Entry Machine Warnings — told to stop and move to next station (+30s)", key="ind_p3b"): penalties += 30
-            if st.checkbox("Missed 35m Hose Drag Marker (+10s)", key="ind_p4"): penalties += 10
-            if st.checkbox("Hose Makeup Box Overflow Boundary (+10s)", key="ind_p5"): penalties += 10
-            if st.checkbox("Foam Containers Slid / Thrown / Not Seated Correctly Within Tray (+10s)", key="ind_p6"): penalties += 10
-            if st.checkbox("Dummy Head / Face Drag or Feet Lifted off Ground — 1st warning, 2nd warning is a penalty (+15s)", key="ind_p7"): penalties += 15
+            for p in PENALTIES:
+                if p["relay_only"]:
+                    continue
+                if st.checkbox(f"{p['desc']} ({p['label']})", key=f"ind_{p['code']}"):
+                    penalties += p["pts"]
             
             # Validation check
             ind_time_valid = (mins is not None or secs is not None) and ((mins or 0) * 60 + (secs or 0.0) > 0)
@@ -787,16 +1293,9 @@ with tab_admin:
             
             st.markdown("##### ⚠️ Rule Violations & Penalties")
             penalties = 0
-            if st.checkbox("Dropped Cleveland Hose Pack / Incorrect Placement (+5s)", key="rel_p1"): penalties += 5
-            if st.checkbox("Improper RTC Tool Table Placement (+5s per tool)", key="rel_p2"): penalties += 5
-            if st.checkbox("Improper Forcible Entry Sledge Technique — 2nd warning is a penalty (+10s)", key="rel_p3"): penalties += 10
-            if st.checkbox("Multiple Improper Forcible Entry Machine Warnings — told to stop and move to next station (+30s)", key="rel_p3b"): penalties += 30
-            if st.checkbox("Missed 35m Hose Drag Marker (+10s)", key="rel_p4"): penalties += 10
-            if st.checkbox("Hose Makeup Box Overflow Boundary (+10s)", key="rel_p5"): penalties += 10
-            if st.checkbox("Foam Containers Slid / Thrown / Not Seated Correctly Within Tray (+10s)", key="rel_p6"): penalties += 10
-            if st.checkbox("Dummy Head / Face Drag or Feet Lifted off Ground — 1st warning, 2nd warning is a penalty (+15s)", key="rel_p7"): penalties += 15
-            if st.checkbox("Relay Touch-Tag missed or out of zone (+10s)", key="rel_p8"): penalties += 10
-            if st.checkbox("Dummy drag boundary lane crossing (+15s)", key="rel_p9"): penalties += 15
+            for p in PENALTIES:
+                if st.checkbox(f"{p['desc']} ({p['label']})", key=f"rel_{p['code']}"):
+                    penalties += p["pts"]
             
             # Validation check
             rel_time_valid = (mins is not None or secs is not None) and ((mins or 0) * 60 + (secs or 0.0) > 0)
@@ -865,11 +1364,11 @@ with tab_course:
     with info_stations:
         st.markdown("#### Station-by-Station Guide")
         st.caption(
-            "⚠️ Editor's note: the apparatus names and penalty codes below are taken directly from the "
-            "official course diagram and the Marshal entry forms, so those are accurate. The bracketed "
-            "[ ] technique descriptions are placeholders only — replace them with the exact wording from "
-            "your rulebook before publishing this page. Claude has not seen the rulebook and has not verified "
-            "the actual technique requirements."
+            "⚠️ Editor's note: the apparatus names come straight from the single penalty/station list this "
+            "whole app shares (same source as the entry forms and the Rules & Penalties table below — "
+            "so it cannot drift out of sync with them). The bracketed [ ] technique descriptions are still "
+            "placeholders only — replace them with the exact wording from your rulebook before publishing "
+            "this page. Claude has not seen the rulebook and has not verified the actual technique requirements."
         )
 
         # Paste a video URL per station as footage becomes available.
@@ -884,75 +1383,13 @@ with tab_course:
             "dummy_drag": "",
         }
 
-        stations = [
-            {
-                "key": "shuttle",
-                "title": "1. 35m Shuttle",
-                "desc": "[Describe the required technique for the 35m shuttle run.]",
-                "acceptable": "[State what counts as a clean run vs a faulted one.]",
-                "penalty": "No dedicated penalty code for this station — see Rules & Penalties for anything that applies here.",
-            },
-            {
-                "key": "cleveland_carry",
-                "title": "2. 30m Cleveland Roll Carry",
-                "desc": "[Describe the required technique for carrying the Cleveland hose roll over 30m.]",
-                "acceptable": "[State what counts as a dropped pack vs a secure carry. Correct Placement vs Incorrect Placement]",
-                "penalty": "Dropped Cleveland Hose Pack / Incorrect Placement— +5s",
-            },
-            {
-                "key": "rtc_carry",
-                "title": "3. RTC Tool Carry",
-                "desc": "[Describe how tools must be carried and placed on the RTC Tool Table.]",
-                "acceptable": "[State correct placement vs incorrect placement.]",
-                "penalty": "Improper RTC Tool Table Placement — +5s per tool",
-            },
-            {
-                "key": "force_machine",
-                "title": "4. Corhaven Force Entry Machine",
-                "desc": "[Describe the required forcible entry sledge technique at the Corhaven Force Entry Machine.]",
-                "acceptable": "[State correct technique vs incorrect technique, and what counts as a 1st vs 2nd warning.]",
-                "penalty": "Improper Forcible Entry Sledge Technique (2nd warning is a penalty) — +10s. "
-                           "Multiple improper warnings — competitor is told to stop and move to the next station — +30s.",
-            },
-            {
-                "key": "hose_drag",
-                "title": "5. 35m Hose Drag",
-                "desc": "[Describe the required technique for the 35m hose drag.]",
-                "acceptable": "[State what counts as a clean drag vs a missed marker.]",
-                "penalty": "Missed 35m Hose Drag Marker — +10s",
-            },
-            {
-                "key": "hose_makeup",
-                "title": "6. 25m Hose Make Up (Rolled Hose Carry for Non-Ops)",
-                "desc": "[Describe how the hose must be made up (coiled/packed) within 25m. Non-Operational competitors "
-                        "instead carry a rolled hose — describe that variant too.]",
-                "acceptable": "[State the marked boundary the hose must stay within.]",
-                "penalty": "Hose Makeup Box Overflow Boundary — +10s",
-            },
-            {
-                "key": "containers",
-                "title": "7. 4x 20kg Container Carry",
-                "desc": "[Describe how the four 20kg containers must be carried from the Container Tray.]",
-                "acceptable": "[State that containers must not be thrown, slid, or seated incorrectly within the tray.]",
-                "penalty": "Foam Containers Slid / Thrown / Not Seated Correctly Within Tray — +10s",
-            },
-            {
-                "key": "dummy_drag",
-                "title": "8. 50m Dummy Drag / Casualty Rescue (70kg Operational / 50kg Non-Ops)",
-                "desc": "[Describe the required technique for the 50m dummy drag/casualty rescue. Dummy weight is 70kg for "
-                        "Operational competitors and 50kg for Non-Operational competitors.]",
-                "acceptable": "[State what triggers a 1st warning vs a 2nd-warning penalty for a head/face drag and lifting feet off ground.]",
-                "penalty": "Dummy Head / Face Drag or Lifting Feet off Ground (1st warning, 2nd warning is a penalty) — +15s",
-            },
-        ]
-
-        for s in stations:
+        for s in COURSE_STATIONS:
             with st.expander(s["title"]):
                 col_desc, col_video = st.columns([3, 2])
                 with col_desc:
                     st.markdown(f"**What to do:** {s['desc']}")
                     st.markdown(f"**Acceptable / Not acceptable:** {s['acceptable']}")
-                    st.markdown(f"**Penalty if breached:** {s['penalty']}")
+                    st.markdown(f"**Penalty if breached:** {station_penalty_text(s['key'])}")
                 with col_video:
                     video_url = STATION_VIDEOS.get(s["key"], "")
                     if video_url:
@@ -1017,27 +1454,20 @@ with tab_course:
     with info_rules:
         st.markdown("#### Full Rules & Penalties Reference")
         st.write("The following penalties apply to both individual and relay entries:")
-        common_penalties = pd.DataFrame([
-            ("Dropped Cleveland Hose Pack / Incorrect Placement", "+5s"),
-            ("Improper RTC Tool Table Placement", "+5s per tool"),
-            ("Improper Forcible Entry Sledge Technique (2nd warning is a penalty)", "+10s"),
-            ("Multiple Improper Forcible Entry Machine Warnings (told to stop and move to next station)", "+30s"),
-            ("Missed 35m Hose Drag Marker", "+10s"),
-            ("Hose Makeup Box Overflow Boundary", "+10s"),
-            ("Foam Containers Slid / Thrown / Not Seated Correctly Within Tray", "+10s"),
-            ("Dummy Head / Face Drag or Feet Lifted Off Ground (1st warning, 2nd warning is a penalty)", "+15s"),
-        ], columns=["Violation", "Penalty"])
+        common_penalties = pd.DataFrame(
+            [(p["desc"], p["label"]) for p in PENALTIES if not p["relay_only"]],
+            columns=["Violation", "Penalty"],
+        )
         st.table(common_penalties)
 
         st.write("These additional penalties apply to relay entries only:")
-        relay_penalties = pd.DataFrame([
-            ("Relay Touch-Tag Missed or Out of Zone", "+10s"),
-            ("Dummy Drag Boundary Lane Crossing", "+15s"),
-        ], columns=["Violation", "Penalty"])
+        relay_penalties = pd.DataFrame(
+            [(p["desc"], p["label"]) for p in PENALTIES if p["relay_only"]],
+            columns=["Violation", "Penalty"],
+        )
         st.table(relay_penalties)
 
         st.caption(
-            "⚠️ This table is maintained separately from the penalty checkboxes on the Marshal entry forms. "
-            "If a penalty or its value changes, update both places so this public page and the live entry "
-            "form never drift out of sync."
+            "This table, the Marshal entry-form checkboxes, and the Station-by-Station Guide above all read "
+            "from the same penalty list in the app's code — there is nothing left to keep in sync by hand."
         )
