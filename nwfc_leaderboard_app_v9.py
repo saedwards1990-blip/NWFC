@@ -896,8 +896,8 @@ with tab_course:
                 "key": "cleveland_carry",
                 "title": "2. 30m Cleveland Roll Carry",
                 "desc": "[Describe the required technique for carrying the Cleveland hose roll over 30m.]",
-                "acceptable": "[State what counts as a dropped pack vs a secure carry.]",
-                "penalty": "Dropped Cleveland Hose Pack — +5s",
+                "acceptable": "[State what counts as a dropped pack vs a secure carry. Correct Placement vs Incorrect Placement]",
+                "penalty": "Dropped Cleveland Hose Pack / Incorrect Placement— +5s",
             },
             {
                 "key": "rtc_carry",
@@ -941,8 +941,8 @@ with tab_course:
                 "title": "8. 50m Dummy Drag / Casualty Rescue (70kg Operational / 50kg Non-Ops)",
                 "desc": "[Describe the required technique for the 50m dummy drag/casualty rescue. Dummy weight is 70kg for "
                         "Operational competitors and 50kg for Non-Operational competitors.]",
-                "acceptable": "[State what triggers a 1st warning vs a 2nd-warning penalty for a head/face drag.]",
-                "penalty": "Dummy Head / Face Drag (1st warning, 2nd warning is a penalty) — +15s",
+                "acceptable": "[State what triggers a 1st warning vs a 2nd-warning penalty for a head/face drag and lifting feet off ground.]",
+                "penalty": "Dummy Head / Face Drag or Lifting Feet off Ground (1st warning, 2nd warning is a penalty) — +15s",
             },
         ]
 
