@@ -7,6 +7,7 @@ import urllib.parse
 import csv
 import io
 import json
+import base64
 import requests
 from datetime import datetime
 
@@ -45,18 +46,13 @@ st.set_page_config(
 # ==========================================
 # MOBILE / ACCESSIBILITY CSS
 # ==========================================
-# Confirmed via a real phone recording (1080x2400): without this, the hero
-# title wraps across 4 lines and pushes the leaderboard off the first screen,
-# and the tab bar needs horizontal scrolling sooner than it should.
+# Confirmed via a real phone recording (1080x2400): without this, the tab
+# bar needs horizontal scrolling sooner than it should. (The old hero-title
+# wrapping fix that used to live here was for an st.title() "h1" element;
+# the title is now part of the banner below with its own clamp()'d sizing,
+# so that rule is gone rather than left dangling against nothing.)
 st.markdown("""
 <style>
-/* Hero title: scales with viewport width so it stops eating the whole
-   first screen on a phone, but stays large on desktop. */
-h1 {
-    font-size: clamp(1.4rem, 5vw, 2.75rem) !important;
-    line-height: 1.2 !important;
-}
-
 /* Tighter tab labels so more of the 4-tab bar fits before it needs a
    horizontal swipe. */
 .stTabs [data-baseweb="tab"] {
@@ -447,16 +443,70 @@ def write_relay_run(team_name, division, r1, r2, r3, r4, raw_time, penalties, fi
     return True
 
 
-logo_col, title_col = st.columns([1, 6])
-with logo_col:
-    # Fixed pixel width rather than use_container_width — on a phone the
-    # columns above stack vertically, and a container-width 1024x1024 logo
-    # would then fill the full screen width, recreating the same
-    # "giant image eats the first screen" problem fixed for the title above.
-    st.image("assets/nwfrs_logo.png", width=90)
-with title_col:
-    st.title("🏆 NORTH WALES FIREFIGHTER CHALLENGE (NWFC)")
-    st.subheader("Official Live Leaderboard & Ticket Selection System")
+# ==========================================================================
+# BRAND HEADER BANNER
+#
+# Renders once, above the tabs, so it's the first thing on every tab (the
+# tab content below is just whichever one is selected — this banner isn't
+# per-tab, it's shared). Built as one flex-row HTML block with the crest
+# base64-embedded, instead of st.columns + st.image + st.title, because
+# st.columns stacks vertically on a phone — which is exactly what made the
+# crest shrink down to a small icon sitting alone above the title instead
+# of reading as a banner. A plain div with CSS flexbox keeps the crest and
+# the title side by side at every width, with its own dark background so it
+# reads as a header band rather than a logo someone happened to place near
+# some text.
+@st.cache_data
+def _load_logo_b64(path):
+    with open(path, "rb") as f:
+        return base64.b64encode(f.read()).decode("utf-8")
+
+_logo_b64 = _load_logo_b64("assets/nwfrs_logo.png")
+
+st.markdown(f"""
+<style>
+.nwfc-header-banner {{
+    display: flex;
+    align-items: center;
+    gap: clamp(10px, 3vw, 22px);
+    background: linear-gradient(135deg, #1f2d3d 0%, #2c3e50 100%);
+    border-radius: 12px;
+    padding: clamp(10px, 2.5vw, 20px) clamp(14px, 3vw, 28px);
+    margin-bottom: 14px;
+}}
+.nwfc-header-banner img {{
+    height: clamp(48px, 11vw, 92px);
+    width: clamp(48px, 11vw, 92px);
+    object-fit: contain;
+    flex-shrink: 0;
+    background: #fff;
+    border-radius: 8px;
+    padding: 4px;
+}}
+.nwfc-header-banner .nwfc-header-text {{
+    color: #ffffff;
+    min-width: 0;
+}}
+.nwfc-header-banner .nwfc-header-title {{
+    font-size: clamp(1.15rem, 4.2vw, 2.3rem);
+    font-weight: 800;
+    line-height: 1.2;
+    margin: 0;
+}}
+.nwfc-header-banner .nwfc-header-sub {{
+    font-size: clamp(0.78rem, 2.1vw, 1.05rem);
+    color: #c7d0d9;
+    margin: 2px 0 0 0;
+}}
+</style>
+<div class="nwfc-header-banner">
+    <img src="data:image/png;base64,{_logo_b64}" alt="NWFRS crest" />
+    <div class="nwfc-header-text">
+        <p class="nwfc-header-title">🏆 NORTH WALES FIREFIGHTER CHALLENGE (NWFC)</p>
+        <p class="nwfc-header-sub">Official Live Leaderboard &amp; Ticket Selection System</p>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
 # ==========================================================================
 # PRINTABLE PDF GENERATION — paper backup forms & marshal observation sheets.
