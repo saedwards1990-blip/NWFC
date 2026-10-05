@@ -1411,7 +1411,7 @@ with tab_course:
         st.markdown("---")
         st.markdown("##### 🎥 Full Course Walkthrough")
         # Paste a YouTube, Vimeo, or direct video file URL here once recorded.
-        FULL_COURSE_VIDEO_URL = ""
+        FULL_COURSE_VIDEO_URL = "https://youtu.be/8e4w8Q7ivGY"
         if FULL_COURSE_VIDEO_URL:
             st.video(FULL_COURSE_VIDEO_URL)
         else:
@@ -1431,13 +1431,13 @@ with tab_course:
         # Paste a video URL per station as footage becomes available.
         STATION_VIDEOS = {
             "shuttle": "",
-            "cleveland_carry": "",
-            "rtc_carry": "",
-            "force_machine": "",
-            "hose_drag": "",
-            "hose_makeup": "",
-            "containers": "",
-            "dummy_drag": "",
+            "cleveland_carry": "https://youtu.be/u5qpXoFd2Tw",
+            "rtc_carry": "https://youtu.be/bZkXUl4mGRE",
+            "force_machine": "https://youtu.be/Ff7ownU6beg",
+            "hose_drag": "https://youtu.be/NVcwHFy3O6k",
+            "hose_makeup": "https://youtu.be/rhBv7v0QONg",
+            "containers": "https://youtu.be/h7T7LXDG1Gs",
+            "dummy_drag": "https://youtu.be/R7gZ2GwpUWY",
         }
 
         for s in COURSE_STATIONS:
@@ -1464,9 +1464,15 @@ with tab_course:
     with info_individual:
         st.markdown("#### Individual Event Format")
         st.write(
-            "[Describe the full individual run end-to-end here: the competitor completes every station solo, "
-            "start to finish, against the clock. Add any rules specific to the individual event that aren't "
-            "already covered in Rules & Penalties.]"
+            "Competitor begins the run on the start line with hand placed on the RTC Tool Table."
+            "Station 1 - 35m Shuttle - Run the length of the course to the Cleveland Roll"
+            "Station 2 - Cleveland Roll - Pick up the Cleveland Roll and run back down the course. Place the Cleveland Roll on top of the Crash Mat"
+            "Station 3 - RTC Tool Carry - Pick up an RTC Tool and take it to the RTC Tool Table at the start line of the course. Go back and collect the 2nd Tool and repeat"
+            "Station 4 - Force Entry Machine - Step onto the Force Entry Machine, pick up the hammer and strije the plate until you see a green marker. Place the hammer on the mat"
+            "Station 5 - 35m Hose Drag - Pick up the mainline branch and run the length of the course, placing it over the line and on the mat"
+            "Station 6 - Hose Make-Up - Run back down the course to the lay flat hose, make it up and place in the Hose Box"
+            "Station 7 - Container Carry - Grab 2 containers, transport to the empty tray, run back for the remaining 2 and repeat"
+            "Station 8 - Dummy Drag - Run back down the course, pick up the dummy, and drag 25m to the hose box, turn and drag to the finish line"
         )
         INDIVIDUAL_VIDEO_URL = ""
         if INDIVIDUAL_VIDEO_URL:
@@ -1490,13 +1496,13 @@ with tab_course:
         }
         relay_legs = [
             ("r1", "Runner 1 — Shuttle & RTC",
-             "[Describe exactly what Runner 1 does: the shuttle run and RTC tool stage, and where the handover to Runner 2 happens.]"),
+             "Runner 1 at the start line, runs the 35m Shuttle, picks up the Cleveland Roll, runs it back and places it on the crash mat. Completes the RTC Tool Carry and then tags Runner 2"),
             ("r2", "Runner 2 — Force & Drag",
-             "[Describe exactly what Runner 2 does: the force machine and hose drag stage, and where the handover to Runner 3 happens.]"),
+             "Runner 2 will start next to the RTC Tool Table, once tagged will complete the Force Entry Machine, move to the Hose Drag, place it on the mat and tag Runner 3"),
             ("r3", "Runner 3 — Makeup & Foam",
-             "[Describe exactly what Runner 3 does: the hose makeup and foam container stage, and where the handover to Runner 4 happens.]"),
+             "Runner 3 will be waiting next to the hose drag mat, once tagged will run back down the course to the hose makeup, make up the hose, place in the box, complete the container carry and then tag Runner 4"),
             ("r4", "Runner 4 — Dummy Rescue",
-             "[Describe exactly what Runner 4 does: the dummy rescue drag to the finish.]"),
+             "Runner 4 will be waiting next to the container trays, once tagged will run back down the course to the dummy, pick up and carry out the 25m dummy drag to the finish"),
         ]
         for key, leg_name, desc in relay_legs:
             with st.expander(leg_name):
