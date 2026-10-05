@@ -1469,10 +1469,12 @@ with info_individual:
             "**Station 5 - 35m Hose Drag** - Pick up the mainline branch and run the length of the course, placing it over the line and on the mat.",
             "**Station 6 - Hose Make-Up** - Run back down the course to the lay flat hose, make it up and place in the Hose Box.",
             "**Station 7 - Container Carry** - Grab 2 containers, transport to the empty tray, run back for the remaining 2 and repeat.",
-            "**Station 8 - Dummy Drag** - Run back down the course, pick up the dummy, and drag 25m to the hose box, turn and drag 25m to the finish line.",
+            "**Station 8 - Dummy Drag** - Run back down the course, pick up the dummy, and drag 25m to the hose box, turn and drag to the finish line.",
         ]
         st.markdown("\n\n".join(INDIVIDUAL_STEPS))
         INDIVIDUAL_VIDEO_URL = ""
+        if INDIVIDUAL_VIDEO_URL:
+            st.video(INDIVIDUAL_VIDEO_URL)
         else:
             st.info("🎥 Individual full run-through video coming soon.")
 
