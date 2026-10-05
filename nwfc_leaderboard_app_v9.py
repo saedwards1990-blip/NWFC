@@ -1457,8 +1457,8 @@ with tab_course:
             "are covered in the Relay Event and Rules & Penalties tabs."
         )
 
-    # ---------------- Individual Event ----------------
-with info_individual:
+        # ---------------- Individual Event ----------------
+        with info_individual:
         st.markdown("#### Individual Event Format")
         INDIVIDUAL_STEPS = [
             "Competitor begins the run on the start line with hand placed on the RTC Tool Table.",
@@ -1478,8 +1478,8 @@ with info_individual:
         else:
             st.info("🎥 Individual full run-through video coming soon.")
 
-    # ---------------- Relay Event ----------------
-    with info_relay:
+        # ---------------- Relay Event ----------------
+        with info_relay:
         st.markdown("#### Relay Event Format")
         st.write(
             "A relay team is four runners. Each runner takes a specific leg of the course — these are the "
@@ -1511,8 +1511,8 @@ with info_individual:
                 else:
                     st.info("🎥 Video coming soon")
 
-    # ---------------- Rules & Penalties ----------------
-    with info_rules:
+        # ---------------- Rules & Penalties ----------------
+        with info_rules:
         st.markdown("#### Full Rules & Penalties Reference")
         st.write("The following penalties apply to both individual and relay entries:")
         common_penalties = pd.DataFrame(
