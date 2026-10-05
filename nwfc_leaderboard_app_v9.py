@@ -1458,30 +1458,21 @@ with tab_course:
         )
 
     # ---------------- Individual Event ----------------
-    with info_individual:
+with info_individual:
         st.markdown("#### Individual Event Format")
-        st.write(
-            "Competitor begins the run on the start line with hand placed on the RTC Tool Table.
-            
-            Station 1 - 35m Shuttle - Run the length of the course to the Cleveland Roll
-            
-            Station 2 - Cleveland Roll - Pick up the Cleveland Roll and run back down the course. Place the Cleveland Roll on top of the Crash Mat
-        
-            Station 3 - RTC Tool Carry - Pick up an RTC Tool and take it to the RTC Tool Table at the start line of the course. Go back and collect the 2nd Tool and repeat
-            
-            Station 4 - Force Entry Machine - Step onto the Force Entry Machine, pick up the hammer and strike the plate until you see a green marker. Place the hammer on the mat
-            
-            Station 5 - 35m Hose Drag - Pick up the mainline branch and run the length of the course, placing it over the line and on the mat
-            
-            Station 6 - Hose Make-Up - Run back down the course to the lay flat hose, make it up and place in the Hose Box
-            
-            Station 7 - Container Carry - Grab 2 containers, transport to the empty tray, run back for the remaining 2 and repeat
-            
-            Station 8 - Dummy Drag - Run back down the course, pick up the dummy, and drag 25m to the hose box, turn and drag to the finish line"
-        )
+        INDIVIDUAL_STEPS = [
+            "Competitor begins the run on the start line with hand placed on the RTC Tool Table.",
+            "**Station 1 - 35m Shuttle** - Run the length of the course to the Cleveland Roll.",
+            "**Station 2 - Cleveland Roll** - Pick up the Cleveland Roll and run back down the course. Place the Cleveland Roll on top of the Crash Mat.",
+            "**Station 3 - RTC Tool Carry** - Pick up an RTC Tool and take it to the RTC Tool Table at the start line of the course. Go back and collect the 2nd Tool and repeat.",
+            "**Station 4 - Force Entry Machine** - Step onto the Force Entry Machine, pick up the hammer and strike the plate until you see a green marker. Place the hammer on the mat.",
+            "**Station 5 - 35m Hose Drag** - Pick up the mainline branch and run the length of the course, placing it over the line and on the mat.",
+            "**Station 6 - Hose Make-Up** - Run back down the course to the lay flat hose, make it up and place in the Hose Box.",
+            "**Station 7 - Container Carry** - Grab 2 containers, transport to the empty tray, run back for the remaining 2 and repeat.",
+            "**Station 8 - Dummy Drag** - Run back down the course, pick up the dummy, and drag 25m to the hose box, turn and drag 25m to the finish line.",
+        ]
+        st.markdown("\n\n".join(INDIVIDUAL_STEPS))
         INDIVIDUAL_VIDEO_URL = ""
-        if INDIVIDUAL_VIDEO_URL:
-            st.video(INDIVIDUAL_VIDEO_URL)
         else:
             st.info("🎥 Individual full run-through video coming soon.")
 
