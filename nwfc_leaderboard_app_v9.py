@@ -24,7 +24,7 @@ def convert_to_export_url(url):
     if "export?format=csv" in url or "/pub?" in url:
         return url
     if "docs.google.com/spreadsheets/d/" in url:
-        parts = url.split("docs.google.com/spreadsheets/d/")
+        parts = url.split("docs.google.com/spreadsheets/d/")    
         if len(parts) > 1:
             subparts = parts[1].split("/")
             spreadsheet_id = subparts[0]
@@ -1400,7 +1400,7 @@ with tab_course:
             unsafe_allow_html=True
         )
         st.image(
-            "assets/nwfc_course_layout.png.jpg",
+            "assets/nwfc_course_blueprint_topdown.png",
             caption="Official Course Layout",
             use_container_width=True,
         )
