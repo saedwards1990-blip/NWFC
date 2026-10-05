@@ -123,53 +123,50 @@ COURSE_STATIONS = [
     {
         "key": "shuttle",
         "title": "1. 35m Shuttle",
-        "desc": "[Describe the required technique for the 35m shuttle run.]",
-        "acceptable": "[State what counts as a clean run vs a faulted one.]",
+        "desc": "Run the full 35m of the course to the Cleveland Roll",
+        "acceptable": "Can be completed at any pace. Its just a shuttle run ... ",
     },
     {
         "key": "cleveland_carry",
         "title": "2. 30m Cleveland Roll Carry",
-        "desc": "[Describe the required technique for carrying the Cleveland hose roll over 30m.]",
-        "acceptable": "[State what counts as a dropped pack vs a secure carry, and what counts as incorrect placement.]",
+        "desc": "Pick up the CLeveland Roll and carry however you see fit. Run back toward the start line, place onto the crach mat",
+        "acceptable": "A dropped clevelan roll will incur a penalty. Incorrect placement on the crash mat will also incur a penalty",
     },
     {
         "key": "rtc_carry",
         "title": "3. RTC Tool Carry",
-        "desc": "[Describe how tools must be carried and placed on the RTC Tool Table.]",
-        "acceptable": "[State correct placement vs incorrect placement.]",
+        "desc": "Pick up one RTC Tool with either 1 or 2 hands. Transport one at a time to the RTC Tool Table.",
+        "acceptable": "RTC Tool dropped or slammed down will incur a penalty. Incorrect placement outside of the designated area on the table will be a penalty",
     },
     {
         "key": "force_machine",
         "title": "4. Corhaven Force Entry Machine",
-        "desc": "[Describe the required forcible entry sledge technique at the Corhaven Force Entry Machine.]",
-        "acceptable": "[State correct technique vs incorrect technique, and what counts as a 1st vs 2nd warning.]",
+        "desc": "Feet either side of the plate, pick up the hammer and strike squarely on the plate until it moves enough to see a green marker or the marshal tells you to stop. Place the hammer on the placement mat",
+        "acceptable": "Incorrect technique - Missing the plate / Using the side of the hammer head will incur penalties. 1st offence will be a warning. 2nd will be a penalty. 3rd Warning, you will be told to stop. Incorrect placement of hammer on mat will also incur a penalty",
     },
     {
         "key": "hose_drag",
         "title": "5. 35m Hose Drag",
-        "desc": "[Describe the required technique for the 35m hose drag.]",
-        "acceptable": "[State what counts as a clean drag vs a missed marker.]",
+        "desc": "Pick up and run with the Hose. Carry under arm or over the shoulder. Place the branch over the line and on the mat.",
+        "acceptable": "Not placing the branch on the mat and failing to place it past the line will both incur penalties.",
     },
     {
         "key": "hose_makeup",
         "title": "6. 25m Hose Make Up (Rolled Hose Carry for Non-Ops)",
-        "desc": "[Describe how the hose must be made up (coiled/packed) within 25m. Non-Operational competitors "
-                "instead carry a rolled hose — describe that variant too.]",
-        "acceptable": "[State the marked boundary the hose must stay within.]",
+        "desc": "Make up the hose and place into the hose box",
+        "acceptable": "Hose must fit in the box, any hose over the top of the box will incur a penalty.",
     },
     {
         "key": "containers",
         "title": "7. 4x 20kg Container Carry",
-        "desc": "[Describe how the four 20kg containers must be carried from the Container Tray.]",
-        "acceptable": "[State that containers must not be thrown, slid, or seated incorrectly within the tray.]",
+        "desc": "Carry 2 containers at a time and place in the empty tray. Repeat with the remaining 2.",
+        "acceptable": "Containers must not be thrown, slid, or seated incorrectly within the tray, this will incur a penalty",
     },
     {
         "key": "dummy_drag",
         "title": "8. 50m Dummy Drag / Casualty Rescue (70kg Operational / 50kg Non-Ops)",
-        "desc": "[Describe the required technique for the 50m dummy drag/casualty rescue. Dummy weight is 70kg for "
-                "Operational competitors and 50kg for Non-Operational competitors.]",
-        "acceptable": "[State what triggers a 1st warning vs a 2nd-warning penalty for a head/face drag or for "
-                       "feet lifted off the ground.]",
+        "desc": "Pick up dunmmy and drag backward 25m to the hose box, turn and return the 25m to the finish line.",
+        "acceptable": "Dummy must not be lifted completely off the ground, or dragged by the face or neck. Dummy's feet must cross the finish line for the timer to stop.",
     },
 ]
 
