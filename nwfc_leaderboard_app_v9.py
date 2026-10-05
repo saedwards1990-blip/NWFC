@@ -130,7 +130,7 @@ COURSE_STATIONS = [
         "key": "cleveland_carry",
         "title": "2. 30m Cleveland Roll Carry",
         "desc": "Pick up the CLeveland Roll and carry however you see fit. Run back toward the start line, place onto the crach mat",
-        "acceptable": "A dropped clevelan roll will incur a penalty. Incorrect placement on the crash mat will also incur a penalty",
+        "acceptable": "A dropped cleveland roll will incur a penalty. Incorrect placement on the crash mat will also incur a penalty",
     },
     {
         "key": "rtc_carry",
