@@ -979,21 +979,29 @@ with tab_leaderboard:
                 df_filtered_rel["Time"] = df_filtered_rel["final_time_sec"].apply(format_time)
                 df_filtered_rel.index = range(1, len(df_filtered_rel) + 1)
                 
-                # Professional display formatting: show Relay Team Name explicitly.
-                # Time is placed right after the team name for the same mobile
-                # reason as the individual table above — four runner-name
-                # columns would otherwise push it off-screen entirely.
-                df_display = df_filtered_rel.rename(columns={"station": "Relay Team Name"}).copy()
-                cols_to_show = ["Relay Team Name", "Time", "division", "runner_1", "runner_2", "runner_3", "runner_4"]
+       # Show the relay team name explicitly. The Google Sheet header for the
+                # team name can differ from the local DB ("station"), so match any
+                # sensible variant instead of silently dropping the column.
+                df_display = df_filtered_rel.copy()
+                _team_aliases = ("station", "team", "team name", "team_name", "relay team name",
+                                 "relay name", "relay_name", "relay")
+                _team_col = next((c for c in df_display.columns
+                                  if str(c).strip().lower() in _team_aliases), None)
+                if _team_col is not None:
+                    df_display = df_display.rename(columns={_team_col: "Relay Team Name"})
+                else:
+                    st.warning("Relay team name column not found in the data. Columns available: "
+                               + ", ".join(str(c) for c in df_display.columns))
+
+                cols_to_show = ["Relay Team Name", "Time", "runner_1", "runner_2", "runner_3", "runner_4"]
                 cols_to_show = [c for c in cols_to_show if c in df_display.columns]
 
                 st.dataframe(
                     df_display[cols_to_show],
                     use_container_width=True,
                     column_config={
-                        "Relay Team Name": st.column_config.TextColumn("Team", width="medium"),
+                        "Relay Team Name": st.column_config.TextColumn("Relay Team", width="medium"),
                         "Time": st.column_config.TextColumn("Time", width="small"),
-                        "division": st.column_config.TextColumn("Div.", width="small"),
                         "runner_1": st.column_config.TextColumn("Runner 1", width="small"),
                         "runner_2": st.column_config.TextColumn("Runner 2", width="small"),
                         "runner_3": st.column_config.TextColumn("Runner 3", width="small"),
