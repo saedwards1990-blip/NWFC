@@ -966,23 +966,22 @@ with tab_leaderboard:
         division_filter = st.selectbox("Filter Relay Class:", [
             "All Relay Teams", "Male", "Female", "Mixed"
         ])
-        
+
         df_rel = get_relays_data()
-        
+
         if not df_rel.empty:
             if division_filter == "All Relay Teams":
                 df_filtered_rel = df_rel.copy()
             else:
                 df_filtered_rel = df_rel[df_rel['division'] == division_filter].copy()
-                
+
             if not df_filtered_rel.empty:
                 df_filtered_rel = df_filtered_rel.sort_values(by="final_time_sec", ascending=True)
                 df_filtered_rel["Time"] = df_filtered_rel["final_time_sec"].apply(format_time)
                 df_filtered_rel.index = range(1, len(df_filtered_rel) + 1)
-                
-       # Show the relay team name explicitly. The Google Sheet header for the
-                # team name can differ from the local DB ("station"), so match any
-                # sensible variant instead of silently dropping the column.
+
+                # The Google Sheet header for the team name can differ from the local DB
+                # ("station"), so match any sensible variant instead of dropping the column.
                 df_display = df_filtered_rel.copy()
                 _team_aliases = ("relay_team_name", "station", "team", "team name", "team_name",
                                  "relay team name", "relay name", "relay_name", "relay")
@@ -996,7 +995,7 @@ with tab_leaderboard:
 
                 cols_to_show = ["Relay Team Name", "Time", "division", "runner_1", "runner_2", "runner_3", "runner_4"]
                 cols_to_show = [c for c in cols_to_show if c in df_display.columns]
-                
+
                 st.dataframe(
                     df_display[cols_to_show],
                     use_container_width=True,
@@ -1008,10 +1007,12 @@ with tab_leaderboard:
                         "runner_2": st.column_config.TextColumn("Runner 2", width="small"),
                         "runner_3": st.column_config.TextColumn("Runner 3", width="small"),
                         "runner_4": st.column_config.TextColumn("Runner 4", width="small"),
-                    }),
+                    },
+                )
+            else:
+                st.info("No relay times recorded in this filtered category yet.")
         else:
             st.info("No relay times recorded in this category yet.")
-
 with tab_selection:
     st.markdown("### 🎟️ Road to Swansea 2027: Ticket Allocation Algorithm")
     st.write(
