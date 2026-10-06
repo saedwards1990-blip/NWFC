@@ -984,8 +984,8 @@ with tab_leaderboard:
                 # team name can differ from the local DB ("station"), so match any
                 # sensible variant instead of silently dropping the column.
                 df_display = df_filtered_rel.copy()
-                _team_aliases = ("station", "team", "team name", "team_name", "relay team name",
-                                 "relay name", "relay_name", "relay")
+                _team_aliases = ("relay_team_name", "station", "team", "team name", "team_name",
+                                 "relay team name", "relay name", "relay_name", "relay")
                 _team_col = next((c for c in df_display.columns
                                   if str(c).strip().lower() in _team_aliases), None)
                 if _team_col is not None:
@@ -994,7 +994,7 @@ with tab_leaderboard:
                     st.warning("Relay team name column not found in the data. Columns available: "
                                + ", ".join(str(c) for c in df_display.columns))
 
-                cols_to_show = ["Relay Team Name", "Time", "runner_1", "runner_2", "runner_3", "runner_4"]
+                cols_to_show = ["Relay Team Name", "Time", "division", "runner_1", "runner_2", "runner_3", "runner_4"]
                 cols_to_show = [c for c in cols_to_show if c in df_display.columns]
 
                 st.dataframe(
@@ -1003,14 +1003,12 @@ with tab_leaderboard:
                     column_config={
                         "Relay Team Name": st.column_config.TextColumn("Relay Team", width="medium"),
                         "Time": st.column_config.TextColumn("Time", width="small"),
+                        "division": st.column_config.TextColumn("Division", width="small"),
                         "runner_1": st.column_config.TextColumn("Runner 1", width="small"),
                         "runner_2": st.column_config.TextColumn("Runner 2", width="small"),
                         "runner_3": st.column_config.TextColumn("Runner 3", width="small"),
                         "runner_4": st.column_config.TextColumn("Runner 4", width="small"),
                     },
-                )
-            else:
-                st.info("No relay times recorded in this filtered category yet.")
         else:
             st.info("No relay times recorded in this category yet.")
 
