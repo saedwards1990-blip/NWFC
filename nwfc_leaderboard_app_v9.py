@@ -996,7 +996,6 @@ with tab_leaderboard:
 
                 cols_to_show = ["Relay Team Name", "Time", "division", "runner_1", "runner_2", "runner_3", "runner_4"]
                 cols_to_show = [c for c in cols_to_show if c in df_display.columns]
-                ])
                 
                 st.dataframe(
                     df_display[cols_to_show],
@@ -1009,7 +1008,7 @@ with tab_leaderboard:
                         "runner_2": st.column_config.TextColumn("Runner 2", width="small"),
                         "runner_3": st.column_config.TextColumn("Runner 3", width="small"),
                         "runner_4": st.column_config.TextColumn("Runner 4", width="small"),
-                    },
+                    }),
         else:
             st.info("No relay times recorded in this category yet.")
 
