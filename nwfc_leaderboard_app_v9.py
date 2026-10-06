@@ -996,7 +996,6 @@ with tab_leaderboard:
 
                 cols_to_show = ["Relay Team Name", "Time", "division", "runner_1", "runner_2", "runner_3", "runner_4"]
                 cols_to_show = [c for c in cols_to_show if c in df_display.columns]
-
                 st.dataframe(
                     df_display[cols_to_show],
                     use_container_width=True,
