@@ -405,6 +405,7 @@ def write_relay_run(team_name, division, r1, r2, r3, r4, raw_time, penalties, fi
             payload = {
                 "action": "add_relay",
                 "station": team_name, # Map team_name directly to the existing station column
+                "relay_team_name": team_name, # Sheet header is relay_team_name
                 "watch": "N/A", # Pass N/A for watches
                 "division": division, # 'Male', 'Female', 'Mixed'
                 "runner_1": r1,
