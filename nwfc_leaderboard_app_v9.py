@@ -900,14 +900,23 @@ tab_leaderboard, tab_selection, tab_admin, tab_course = st.tabs([
 
 with tab_leaderboard:
     st.markdown("### 🏆 Live Leaderboards (Updated Real-Time)")
-    
+    st.markdown("""
+    <style>
+    [data-testid="stTable"] { overflow-x: auto; }
+    [data-testid="stTable"] table { width: 100%; }
+    [data-testid="stTable"] th, [data-testid="stTable"] td {
+        font-size: clamp(0.72rem, 3.3vw, 0.95rem);
+        padding: 0.35rem 0.4rem;
+    }
+    </style>
+    """, unsafe_allow_html=True)
     col_ind, col_rel = st.columns(2)
     
-    with col_ind:
-        st.markdown("#### 🏃 Individual Championship")
-        
-        # Symmetrical and professional side-by-side drop-down filters
-        filt_c1, filt_c2 = st.columns(2)
+    with col_ind: 
+                    _tbl = df_filtered[display_cols].rename(columns={
+                    "name": "Name", "category": "Category", "age_group": "Age",
+                    "station": "Station", "watch": "Watch"})
+                st.table(_tbl)
         with filt_c1:
             category_filter = st.selectbox("Filter Individual Class:", [
                 "All Operational Staff", "Operational Male Only", "Operational Female Only", "Non-Operational"
@@ -965,12 +974,11 @@ with tab_leaderboard:
             st.info("No runs recorded in this category yet.")
             
     with col_rel:
-        st.markdown("#### 👥 Service Relays")
-        division_filter = st.selectbox("Filter Relay Class:", [
-            "All Relay Teams", "Male", "Female", "Mixed"
-        ])
-
-        df_rel = get_relays_data()
+                    _rel_tbl = df_display[cols_to_show].rename(columns={
+                    "Relay Team Name": "Relay Team", "division": "Division",
+                    "runner_1": "Runner 1", "runner_2": "Runner 2",
+                    "runner_3": "Runner 3", "runner_4": "Runner 4"})
+                st.table(_rel_tbl)
 
         if not df_rel.empty:
             if division_filter == "All Relay Teams":
