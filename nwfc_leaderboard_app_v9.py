@@ -914,8 +914,8 @@ with tab_leaderboard:
     
     with col_ind: 
                     _tbl = df_filtered[display_cols].rename(columns={
-                    "name": "Name", "category": "Category", "age_group": "Age",
-                    "station": "Station", "watch": "Watch"})
+                        "name": "Name", "category": "Category", "age_group": "Age",
+                        "station": "Station", "watch": "Watch"})
                     st.table(_tbl)
         with filt_c1:
             category_filter = st.selectbox("Filter Individual Class:", [
@@ -975,9 +975,9 @@ with tab_leaderboard:
             
     with col_rel:
                     _rel_tbl = df_display[cols_to_show].rename(columns={
-                    "Relay Team Name": "Relay Team", "division": "Division",
-                    "runner_1": "Runner 1", "runner_2": "Runner 2",
-                    "runner_3": "Runner 3", "runner_4": "Runner 4"})
+                        "Relay Team Name": "Relay Team", "division": "Division",
+                        "runner_1": "Runner 1", "runner_2": "Runner 2",
+                        "runner_3": "Runner 3", "runner_4": "Runner 4"})
                     st.table(_rel_tbl)
 
         if not df_rel.empty:
