@@ -891,6 +891,42 @@ def build_observation_sheets_pdf():
 
 
 # Tab Layout
+# ==========================================================================
+# "WHAT DOES THE CHALLENGE INVOLVE?" — button under the banner that opens a
+# pop-up for newcomers, so they don't have to find the Competition Information
+# tab. Reads COURSE_STATIONS so it can never drift from the rest of the app.
+# ==========================================================================
+FULL_COURSE_VIDEO_URL = "https://youtu.be/8e4w8Q7ivGY"
+
+
+def _challenge_body():
+    st.markdown(
+        "The Firefighter Challenge is a **timed course of 8 stations**, run as an **individual** event "
+        "or as a **relay of four**. Fastest time wins. Technique errors add **penalty seconds** to your time."
+    )
+    if FULL_COURSE_VIDEO_URL:
+        st.video(FULL_COURSE_VIDEO_URL)
+    st.markdown("**The 8 stations, in order:**")
+    st.markdown("\n".join(f"- {_s['title']}" for _s in COURSE_STATIONS))
+    st.info(
+        "Want the detail? Open the **📖 Competition Information** tab (top of the page) for the course "
+        "layout, a video and rules for every station, the relay legs, and the full penalty list."
+    )
+
+
+if hasattr(st, "dialog"):
+    @st.dialog("What does the challenge involve?", width="large")
+    def _challenge_dialog():
+        _challenge_body()
+
+    if st.button("🎥 NEW HERE?  What does the challenge involve?  Tap to see",
+                 type="primary", use_container_width=True, key="open_challenge_info"):
+        _challenge_dialog()
+else:
+    # Older Streamlit without st.dialog: fall back to an expander in the same place.
+    with st.expander("🎥 NEW HERE?  What does the challenge involve?  Tap to see", expanded=False):
+        _challenge_body()
+
 tab_leaderboard, tab_selection, tab_admin, tab_course = st.tabs([
     "📊 Live Standings",
     "🎟️ Swansea 2027 Ticket Selection",
@@ -1436,7 +1472,8 @@ with tab_course:
         st.markdown("---")
         st.markdown("##### 🎥 Full Course Walkthrough")
         # Paste a YouTube, Vimeo, or direct video file URL here once recorded.
-        FULL_COURSE_VIDEO_URL = "https://youtu.be/8e4w8Q7ivGY"
+        # (URL is defined once near the top of the page, FULL_COURSE_VIDEO_URL, and shared
+        # with the "What does the challenge involve?" pop-up.)
         if FULL_COURSE_VIDEO_URL:
             st.video(FULL_COURSE_VIDEO_URL)
         else:
