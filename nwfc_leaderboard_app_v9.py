@@ -1175,8 +1175,8 @@ with tab_admin:
         if st.session_state.get("admin_pw_wrong"):
             st.error("Incorrect password.")
     if st.session_state.get("admin_authed", False):
-        st.success("Access Granted. Marshal Timing Form Active.")
-                st.button("🔒 Log out of marshal panel", on_click=_admin_logout)
+        st.success("Access Granted. Marshal Timing Form Active.") 
+        st.button("🔒 Log out of marshal panel", on_click=_admin_logout)
 
         # Sync health indicator — visible at all times so marshals know whether
         # the cloud connection is currently working, without having to remember
