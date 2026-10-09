@@ -173,10 +173,14 @@ COURSE_STATIONS = [
 PENALTIES = [
     {"code": "P1", "desc": "Dropped Cleveland Hose Pack / Incorrect Placement", "pts": 5, "label": "+5s",
      "station_key": "cleveland_carry", "relay_only": False},
-    {"code": "P2", "desc": "Improper RTC Tool Table Placement", "pts": 5, "label": "+5s per tool",
+    {"code": "P2", "desc": "Improper RTC Tool Table Placement (1st Tool)", "pts": 5, "label": "+5s",
+     "station_key": "rtc_carry", "relay_only": False},
+    {"code": "P2B", "desc": "Improper RTC Tool Table Placement (2nd Tool)", "pts": 5, "label": "+5s",
      "station_key": "rtc_carry", "relay_only": False},
     {"code": "P3", "desc": "Improper Forcible Entry Sledge Technique (2nd warning is a penalty)", "pts": 10,
      "label": "+10s", "station_key": "force_machine", "relay_only": False},
+    {"code": "P3B", "desc": "Improper Hammer Placement on Hammer Placement Mat", "pts": 5,
+     "label": "+5s", "station_key": "force_machine", "relay_only": False},
     {"code": "P4", "desc": "Multiple Improper Forcible Entry Machine Warnings (told to stop and move to next station)",
      "pts": 30, "label": "+30s", "station_key": "force_machine", "relay_only": False},
     {"code": "P5", "desc": "Missed 35m Hose Drag Marker", "pts": 10, "label": "+10s",
@@ -192,7 +196,6 @@ PENALTIES = [
     {"code": "P10", "desc": "Dummy Drag Boundary Lane Crossing", "pts": 15, "label": "+15s",
      "station_key": "dummy_drag", "relay_only": True},
 ]
-
 
 def station_penalty_text(station_key):
     """Builds the Station Guide's 'Penalty if breached' line straight from PENALTIES."""
