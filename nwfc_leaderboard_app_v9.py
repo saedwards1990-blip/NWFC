@@ -900,7 +900,7 @@ tab_leaderboard, tab_selection, tab_admin, tab_course = st.tabs([
 
 with tab_leaderboard:
     st.markdown("### 🏆 Live Leaderboards (Updated Real-Time)")
-        st.markdown("""
+    st.markdown("""
     <style>
     [data-testid="stTable"] { overflow-x: auto; }
     [data-testid="stTable"] table { width: 100%; }
@@ -910,13 +910,14 @@ with tab_leaderboard:
     }
     </style>
     """, unsafe_allow_html=True)
+
     col_ind, col_rel = st.columns(2)
-    
-    with col_ind: 
-            _tbl = df_filtered[display_cols].rename(columns={
-            "name": "Name", "category": "Category", "age_group": "Age",
-            "station": "Station", "watch": "Watch"})
-            st.table(_tbl)
+
+    with col_ind:
+        st.markdown("#### 🏃 Individual Championship")
+
+        # Side-by-side drop-down filters
+        filt_c1, filt_c2 = st.columns(2)
         with filt_c1:
             category_filter = st.selectbox("Filter Individual Class:", [
                 "All Operational Staff", "Operational Male Only", "Operational Female Only", "Non-Operational"
@@ -925,9 +926,9 @@ with tab_leaderboard:
             age_filter = st.selectbox("Filter Age Category:", [
                 "All Age Groups", "18-29", "30-34", "35-39", "40-44", "45-49", "50-54", "55+"
             ])
-        
+
         df_ind = get_individuals_data()
-        
+
         if not df_ind.empty:
             if category_filter == "All Operational Staff":
                 df_filtered = df_ind[df_ind['category'].isin(['Operational Male', 'Operational Female'])].copy()
@@ -937,48 +938,35 @@ with tab_leaderboard:
                 df_filtered = df_ind[df_ind['category'] == 'Operational Female'].copy()
             else:
                 df_filtered = df_ind[df_ind['category'] == 'Non-Operational'].copy()
-                
-            # Direct age filtering integration
+
             if age_filter != "All Age Groups":
                 df_filtered = df_filtered[df_filtered['age_group'] == age_filter].copy()
-                
+
             if not df_filtered.empty:
                 df_filtered = df_filtered.sort_values(by="final_time_sec", ascending=True)
                 df_filtered["Time"] = df_filtered["final_time_sec"].apply(format_time)
                 df_filtered.index = range(1, len(df_filtered) + 1)
-                
-                # Dynamic visual columns based on selection. Time is placed
-                # right after the name (rather than last) so it's the first
-                # thing visible on a phone, before anyone has to scroll the
-                # table sideways past station/watch/category/age_group —
-                # confirmed via a real phone test that Time was being pushed
-                # off-screen entirely in the old column order.
+
+                # Time sits right after the name so it is visible first on a phone.
                 display_cols = ["name", "Time", "age_group", "station", "watch"]
                 if "category" in df_filtered.columns and category_filter == "All Operational Staff":
                     display_cols.insert(2, "category")
-                st.dataframe(
-                    df_filtered[display_cols],
-                    use_container_width=True,
-                    column_config={
-                        "name": st.column_config.TextColumn("Name", width="medium"),
-                        "Time": st.column_config.TextColumn("Time", width="small"),
-                        "category": st.column_config.TextColumn("Category", width="small"),
-                        "age_group": st.column_config.TextColumn("Age", width="small"),
-                        "station": st.column_config.TextColumn("Station", width="small"),
-                        "watch": st.column_config.TextColumn("Watch", width="small"),
-                    },
-                )
+                _tbl = df_filtered[display_cols].rename(columns={
+                    "name": "Name", "category": "Category", "age_group": "Age",
+                    "station": "Station", "watch": "Watch"})
+                st.table(_tbl)
             else:
                 st.info("No runs recorded in this filtered category yet.")
         else:
             st.info("No runs recorded in this category yet.")
-            
+
     with col_rel:
-            _rel_tbl = df_display[cols_to_show].rename(columns={
-            "Relay Team Name": "Relay Team", "division": "Division",
-            "runner_1": "Runner 1", "runner_2": "Runner 2",
-            "runner_3": "Runner 3", "runner_4": "Runner 4"})
-            st.table(_rel_tbl)
+        st.markdown("#### 👥 Service Relays")
+        division_filter = st.selectbox("Filter Relay Class:", [
+            "All Relay Teams", "Male", "Female", "Mixed"
+        ])
+
+        df_rel = get_relays_data()
 
         if not df_rel.empty:
             if division_filter == "All Relay Teams":
@@ -991,7 +979,7 @@ with tab_leaderboard:
                 df_filtered_rel["Time"] = df_filtered_rel["final_time_sec"].apply(format_time)
                 df_filtered_rel.index = range(1, len(df_filtered_rel) + 1)
 
-                # The Google Sheet header for the team name can differ from the local DB
+                # The Sheet header for the team name can differ from the local DB
                 # ("station"), so match any sensible variant instead of dropping the column.
                 df_display = df_filtered_rel.copy()
                 _team_aliases = ("relay_team_name", "station", "team", "team name", "team_name",
@@ -1007,23 +995,16 @@ with tab_leaderboard:
                 cols_to_show = ["Relay Team Name", "Time", "division", "runner_1", "runner_2", "runner_3", "runner_4"]
                 cols_to_show = [c for c in cols_to_show if c in df_display.columns]
 
-                st.dataframe(
-                    df_display[cols_to_show],
-                    use_container_width=True,
-                    column_config={
-                        "Relay Team Name": st.column_config.TextColumn("Relay Team", width="medium"),
-                        "Time": st.column_config.TextColumn("Time", width="small"),
-                        "division": st.column_config.TextColumn("Division", width="small"),
-                        "runner_1": st.column_config.TextColumn("Runner 1", width="small"),
-                        "runner_2": st.column_config.TextColumn("Runner 2", width="small"),
-                        "runner_3": st.column_config.TextColumn("Runner 3", width="small"),
-                        "runner_4": st.column_config.TextColumn("Runner 4", width="small"),
-                    },
-                )
+                _rel_tbl = df_display[cols_to_show].rename(columns={
+                    "Relay Team Name": "Relay Team", "division": "Division",
+                    "runner_1": "Runner 1", "runner_2": "Runner 2",
+                    "runner_3": "Runner 3", "runner_4": "Runner 4"})
+                st.table(_rel_tbl)
             else:
                 st.info("No relay times recorded in this filtered category yet.")
         else:
             st.info("No relay times recorded in this category yet.")
+
 with tab_selection:
     st.markdown("### 🎟️ Welsh Firefighter Challenge Ticket Allocation")
     st.markdown("#### Road to Swansea 2027")    
