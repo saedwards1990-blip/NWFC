@@ -1154,14 +1154,29 @@ with tab_selection:
             st.success("✅ Roster check: 8 male + 8 female = 16 tickets.")
         else:
             st.warning(f"⚠️ Roster check: {n_m} male + {n_f} female. Not enough eligible competitors yet to fill 8 of each.")
+def _check_admin_pw():
+    """Runs when the password box is submitted: verify once, then wipe the box."""
+    entered = st.session_state.get("admin_pw_input", "")
+    admin_pw = st.secrets.get("ADMIN_PASSWORD", "")
+    if admin_pw and entered == admin_pw:
+        st.session_state["admin_authed"] = True
+        st.session_state["admin_pw_wrong"] = False
+    else:
+        st.session_state["admin_pw_wrong"] = bool(entered)
+    st.session_state["admin_pw_input"] = ""   # never leave the typed password sitting in the box
 
+def _admin_logout():
+    st.session_state["admin_authed"] = False
+    st.session_state["admin_pw_wrong"] = False
 with tab_admin:
     st.markdown("### ⏱️ Marshal Race Time Recording")
-    password = st.text_input("Enter Admin Password:", type="password")
-    
-    admin_pw = st.secrets.get("ADMIN_PASSWORD", "")
-    if admin_pw and password == admin_pw:
+    if not st.session_state.get("admin_authed", False):
+        st.text_input("Enter Admin Password:", type="password", key="admin_pw_input", on_change=_check_admin_pw)
+        if st.session_state.get("admin_pw_wrong"):
+            st.error("Incorrect password.")
+    if st.session_state.get("admin_authed", False):
         st.success("Access Granted. Marshal Timing Form Active.")
+                st.button("🔒 Log out of marshal panel", on_click=_admin_logout)
 
         # Sync health indicator — visible at all times so marshals know whether
         # the cloud connection is currently working, without having to remember
