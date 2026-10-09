@@ -916,7 +916,7 @@ with tab_leaderboard:
                     _tbl = df_filtered[display_cols].rename(columns={
                     "name": "Name", "category": "Category", "age_group": "Age",
                     "station": "Station", "watch": "Watch"})
-                st.table(_tbl)
+                    st.table(_tbl)
         with filt_c1:
             category_filter = st.selectbox("Filter Individual Class:", [
                 "All Operational Staff", "Operational Male Only", "Operational Female Only", "Non-Operational"
@@ -978,7 +978,7 @@ with tab_leaderboard:
                     "Relay Team Name": "Relay Team", "division": "Division",
                     "runner_1": "Runner 1", "runner_2": "Runner 2",
                     "runner_3": "Runner 3", "runner_4": "Runner 4"})
-                st.table(_rel_tbl)
+                    st.table(_rel_tbl)
 
         if not df_rel.empty:
             if division_filter == "All Relay Teams":
