@@ -1017,12 +1017,14 @@ with tab_leaderboard:
         else:
             st.info("No relay times recorded in this category yet.")
 with tab_selection:
-    st.markdown("### 🎟️ Road to Swansea 2027: Ticket Allocation Algorithm")
+    st.markdown("### 🎟️ Welsh Firefighter Challenge Ticket Allocation")
+    st.markdown("#### Road to Swansea 2027")    
     st.write(
         "<b>Selection Criteria:</b> 16 Tickets total, including entry, hotel, breakfast, and transport. "
         "Guaranteed tickets are awarded to the <b>Top 4 Males</b> and <b>Top 4 Females</b>. "
-        "The remaining 8 tickets are distributed evenly and proportionately across active age categories "
-        "depending on where the top 8 fall.",
+        "The remaining 8 tickets are split evenly, <b>4 male and 4 female</b>, with each gender's 4 spread "
+        "proportionately across active age categories depending on where that gender's top 4 fall. "
+        "This gives 8 male and 8 female places in total.",
         unsafe_allow_html=True
     )
     
@@ -1062,91 +1064,96 @@ with tab_selection:
         else:
             st.warning("Need at least 4 operational female runs to populate.")
             
-    # Proportional Allocation logic
+        # Proportional Allocation logic (4 male + 4 female remaining places)
     st.markdown("#### 🎯 Proportional Remaining 8-Ticket Distribution")
     all_ages = ['18-29', '30-34', '35-39', '40-44', '45-49', '50-54', '55+']
+    REMAINING_PER_GENDER = 4
+
+    def _apportion(weights, avail, total):
+        """Largest-remainder split of `total` tickets across brackets, capped by who is available."""
+        wsum = sum(weights.values())
+        if wsum == 0:
+            return {a: 0 for a in weights}
+        raw = {a: weights[a] / wsum * total for a in weights}
+        quota = {a: int(raw[a]) for a in weights}
+        short = total - sum(quota.values())
+        for a in sorted(weights, key=lambda a: raw[a] - quota[a], reverse=True)[:short]:
+            quota[a] += 1
+        leftover = 0
+        for a in weights:
+            if quota[a] > avail[a]:
+                leftover += quota[a] - avail[a]
+                quota[a] = avail[a]
+        while leftover > 0:
+            spare = [a for a in weights if quota[a] < avail[a]]
+            if not spare:
+                break
+            spare.sort(key=lambda a: weights[a], reverse=True)
+            quota[spare[0]] += 1
+            leftover -= 1
+        return quota
 
     if len(males) >= 4 and len(females) >= 4:
         top_8 = pd.concat([males.head(4), females.head(4)])
         guaranteed_names = set(top_8['name'])
         top_8_ages = list(top_8['age_group'])
-        guaranteed_bracket_counts = {age: top_8_ages.count(age) for age in all_ages}
 
         st.write("<b>Age Brackets represented in Guaranteed Top 8:</b>", unsafe_allow_html=True)
         cols = st.columns(len(all_ages))
         for idx, age in enumerate(all_ages):
             with cols[idx]:
-                st.metric(label=f"Bracket {age}", value=guaranteed_bracket_counts[age])
+                st.metric(label=f"Bracket {age}", value=top_8_ages.count(age))
 
-        # Remaining pool = all operational competitors not already guaranteed a seat
-        pool = df_all_ind[df_all_ind['category'].isin(['Operational Male', 'Operational Female'])].copy()
-        pool = pool[~pool['name'].isin(guaranteed_names)]
-        remaining_bracket_counts = {age: int((pool['age_group'] == age).sum()) for age in all_ages}
+        def _remaining_for(gender_df):
+            guaranteed_df = gender_df.head(4)
+            pool_g = gender_df[~gender_df['name'].isin(guaranteed_names)].copy()
+            g_counts = {a: int((guaranteed_df['age_group'] == a).sum()) for a in all_ages}
+            avail = {a: int((pool_g['age_group'] == a).sum()) for a in all_ages}
+            # Brackets already well represented in this gender's top 4 are weighted down
+            weights = {a: max(0, avail[a] - g_counts[a]) for a in all_ages}
+            if sum(weights.values()) == 0:
+                weights = dict(avail)
+            quota = _apportion(weights, avail, REMAINING_PER_GENDER)
+            parts = [pool_g[pool_g['age_group'] == a].sort_values(by="final_time_sec", ascending=True).head(quota[a])
+                     for a in all_ages if quota[a] > 0]
+            picked = pd.concat(parts).sort_values(by="final_time_sec", ascending=True) if parts else pool_g.head(0)
+            picked = picked.copy()
+            picked["Time"] = picked["final_time_sec"].apply(format_time)
+            picked.index = range(1, len(picked) + 1)
+            return picked, quota
 
-        # Weight each bracket by its remaining field size, reduced by how many guaranteed
-        # seats that bracket already holds (brackets already well-represented in the top 8
-        # are "negated" down, not excluded entirely, so one strong bracket can't both sweep
-        # the guaranteed 8 AND dominate the proportional 8)
-        weights = {age: max(0, remaining_bracket_counts[age] - guaranteed_bracket_counts[age]) for age in all_ages}
-        total_weight = sum(weights.values())
+        rem_m, quota_m = _remaining_for(males)
+        rem_f, quota_f = _remaining_for(females)
 
-        TICKETS_REMAINING = 8
+        col_rm, col_rf = st.columns(2)
+        with col_rm:
+            st.markdown("##### 🟢 Remaining 4 Male Tickets")
+            st.caption("Quota by bracket: " + ", ".join(f"{a}: {quota_m[a]}" for a in all_ages if quota_m[a] > 0))
+            if len(rem_m) < REMAINING_PER_GENDER:
+                st.warning(f"Only {len(rem_m)} eligible male competitors available for these 4 tickets.")
+            if len(rem_m):
+                st.table(rem_m[["name", "age_group", "Time"]])
+        with col_rf:
+            st.markdown("##### 🔴 Remaining 4 Female Tickets")
+            st.caption("Quota by bracket: " + ", ".join(f"{a}: {quota_f[a]}" for a in all_ages if quota_f[a] > 0))
+            if len(rem_f) < REMAINING_PER_GENDER:
+                st.warning(f"Only {len(rem_f)} eligible female competitors available for these 4 tickets.")
+            if len(rem_f):
+                st.table(rem_f[["name", "age_group", "Time"]])
 
-        if total_weight == 0 or pool.empty:
-            st.warning("No remaining eligible competitors to distribute the 8 eligible tickets across.")
+        st.markdown("---")
+        st.write("<b>🏆 Full 16-Ticket Roster (Guaranteed 8 + Proportional 8):</b>", unsafe_allow_html=True)
+        full_roster = pd.concat([top_8, rem_m, rem_f]).sort_values(by="final_time_sec", ascending=True).copy()
+        full_roster["Time"] = full_roster["final_time_sec"].apply(format_time)
+        full_roster.index = range(1, len(full_roster) + 1)
+        st.table(full_roster[["name", "category", "age_group", "Time"]])
+
+        n_m = int((full_roster["category"] == "Operational Male").sum())
+        n_f = int((full_roster["category"] == "Operational Female").sum())
+        if n_m == 8 and n_f == 8:
+            st.success("✅ Roster check: 8 male + 8 female = 16 tickets.")
         else:
-            # Largest-remainder apportionment so whole-ticket counts sum exactly to 8
-            raw_shares = {age: (weights[age] / total_weight) * TICKETS_REMAINING for age in all_ages}
-            quota = {age: int(raw_shares[age]) for age in all_ages}
-            shortfall = TICKETS_REMAINING - sum(quota.values())
-            remainder_order = sorted(all_ages, key=lambda a: raw_shares[a] - quota[a], reverse=True)
-            for age in remainder_order[:shortfall]:
-                quota[age] += 1
-
-            # Cap each bracket's quota at how many people are actually available in it,
-            # and hand any leftover tickets to the next highest-weighted bracket with spare capacity
-            leftover = 0
-            for age in all_ages:
-                if quota[age] > remaining_bracket_counts[age]:
-                    leftover += quota[age] - remaining_bracket_counts[age]
-                    quota[age] = remaining_bracket_counts[age]
-            while leftover > 0:
-                spare = [a for a in all_ages if quota[a] < remaining_bracket_counts[a]]
-                if not spare:
-                    break
-                spare.sort(key=lambda a: weights[a], reverse=True)
-                quota[spare[0]] += 1
-                leftover -= 1
-
-            st.write("<b>Remaining 8 Tickets — Quota by Bracket:</b>", unsafe_allow_html=True)
-            cols2 = st.columns(len(all_ages))
-            for idx, age in enumerate(all_ages):
-                with cols2[idx]:
-                    st.metric(label=f"Bracket {age}", value=quota[age])
-
-            # Within each bracket's quota, take the fastest remaining competitors
-            selected_parts = []
-            for age in all_ages:
-                n = quota[age]
-                if n <= 0:
-                    continue
-                bracket_pool = pool[pool['age_group'] == age].sort_values(by="final_time_sec", ascending=True)
-                selected_parts.append(bracket_pool.head(n))
-
-            if selected_parts:
-                remaining_selection = pd.concat(selected_parts).sort_values(by="final_time_sec", ascending=True)
-                remaining_selection["Time"] = remaining_selection["final_time_sec"].apply(format_time)
-                st.write("<b>Remaining 8 Ticket Winners:</b>", unsafe_allow_html=True)
-                st.table(remaining_selection[["name", "category", "age_group", "Time"]].reset_index(drop=True))
-
-                st.markdown("---")
-                st.write("<b>🏆 Full 16-Ticket Roster (Guaranteed 8 + Proportional 8):</b>", unsafe_allow_html=True)
-                full_roster = pd.concat([top_8, remaining_selection]).sort_values(by="final_time_sec", ascending=True).copy()
-                full_roster["Time"] = full_roster["final_time_sec"].apply(format_time)
-                full_roster.index = range(1, len(full_roster) + 1)
-                st.table(full_roster[["name", "category", "age_group", "Time"]])
-            else:
-                st.warning("No competitors available to fill the remaining 8 tickets with the current data.")
+            st.warning(f"⚠️ Roster check: {n_m} male + {n_f} female. Not enough eligible competitors yet to fill 8 of each.")
 
 with tab_admin:
     st.markdown("### ⏱️ Marshal Race Time Recording")
