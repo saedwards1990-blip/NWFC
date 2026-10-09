@@ -1325,9 +1325,9 @@ with tab_admin:
             st.markdown("##### ⏱️ Raw Stopwatch Time")
             col_m, col_s = st.columns(2)
             with col_m:
-                mins = st.number_input("Minutes:", min_value=0, max_value=10, value=None, placeholder="0", key="ind_mins")
+                mins = st.number_input("Minutes:", min_value=0, max_value=10, value=0, step=1, key="ind_mins")
             with col_s:
-                secs = st.number_input("Seconds (and ms):", min_value=0.0, max_value=59.999, value=None, step=0.001, format="%.3f", placeholder="0.000", key="ind_secs")
+                secs = st.number_input("Seconds (and ms):", min_value=0.0, max_value=59.999, value=0.0, step=1.0, format="%.3f", key="ind_secs")
             
             st.markdown("##### ⚠️ Rule Violations & Penalties")
             penalties = 0
@@ -1374,9 +1374,9 @@ with tab_admin:
             st.markdown("##### ⏱️ Raw Relay Stopwatch Time")
             col_m, col_s = st.columns(2)
             with col_m:
-                mins = st.number_input("Relay Minutes:", min_value=0, max_value=10, value=None, placeholder="0", key="rel_mins")
+                mins = st.number_input("Relay Minutes:", min_value=0, max_value=10, value=0, step=1, key="rel_mins")
             with col_s:
-                secs = st.number_input("Relay Seconds (and ms):", min_value=0.0, max_value=59.999, value=None, step=0.001, format="%.3f", placeholder="0.000", key="rel_secs")
+                secs = st.number_input("Relay Seconds (and ms):", min_value=0.0, max_value=59.999, value=0.0, step=1.0, format="%.3f", key="rel_secs")
             
             st.markdown("##### ⚠️ Rule Violations & Penalties")
             penalties = 0
