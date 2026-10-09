@@ -900,7 +900,7 @@ tab_leaderboard, tab_selection, tab_admin, tab_course = st.tabs([
 
 with tab_leaderboard:
     st.markdown("### 🏆 Live Leaderboards (Updated Real-Time)")
-    st.markdown("""
+        st.markdown("""
     <style>
     [data-testid="stTable"] { overflow-x: auto; }
     [data-testid="stTable"] table { width: 100%; }
