@@ -954,7 +954,8 @@ with tab_leaderboard:
                 _tbl = df_filtered[display_cols].rename(columns={
                     "name": "Name", "category": "Category", "age_group": "Age",
                     "station": "Station", "watch": "Watch"})
-                st.table(_tbl)
+                _tbl.insert(0, "Pos", range(1, len(_tbl) + 1))
+                st.table(_tbl.reset_index(drop=True).set_index("Pos"))
             else:
                 st.info("No runs recorded in this filtered category yet.")
         else:
@@ -999,7 +1000,8 @@ with tab_leaderboard:
                     "Relay Team Name": "Relay Team", "division": "Division",
                     "runner_1": "Runner 1", "runner_2": "Runner 2",
                     "runner_3": "Runner 3", "runner_4": "Runner 4"})
-                st.table(_rel_tbl)
+                _rel_tbl.insert(0, "Pos", range(1, len(_rel_tbl) + 1))
+                st.table(_rel_tbl.reset_index(drop=True).set_index("Pos"))
             else:
                 st.info("No relay times recorded in this filtered category yet.")
         else:
