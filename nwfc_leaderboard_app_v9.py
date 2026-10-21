@@ -328,6 +328,36 @@ def get_gsheet_data_robust(url):
 # session_state is NOT enough: the browser keeps showing the old text.
 
 
+def pick_remaining_tickets(gender_df, all_ages, n_remaining=4, n_guaranteed=4):
+    """Choose the 'remaining' tickets for ONE gender (gender_df must be that gender's finishers).
+
+    1. The fastest n_guaranteed are already guaranteed and are skipped here.
+    2. Each remaining ticket goes to the age bracket with the FEWEST people selected so far
+       (guaranteed + already picked), so a bracket with nobody in the top 4 is served first.
+    3. Within that choice the fastest remaining competitor of that bracket is taken, and ties
+       between brackets are broken by who is faster. Everything is time-based.
+    Returns (picked_df with a 'why' column, {bracket: count picked})."""
+    g = gender_df.sort_values(by="final_time_sec", ascending=True)
+    top = g.head(n_guaranteed)
+    pool = g.iloc[n_guaranteed:]
+    rep = {a: int((top["age_group"] == a).sum()) for a in all_ages}
+    queues = {a: list(pool[pool["age_group"] == a].index) for a in all_ages}
+    chosen, whys, picked_counts = [], [], {a: 0 for a in all_ages}
+    for _ in range(n_remaining):
+        cands = {a: q[0] for a, q in queues.items() if q}
+        if not cands:
+            break
+        a = min(cands, key=lambda b: (rep[b], pool.loc[cands[b], "final_time_sec"]))
+        whys.append("New age bracket" if rep[a] == 0 else "Fair share")
+        chosen.append(queues[a].pop(0))
+        rep[a] += 1
+        picked_counts[a] += 1
+    picked = pool.loc[chosen].copy()
+    picked["why"] = whys
+    picked = picked.sort_values(by="final_time_sec", ascending=True)
+    return picked, picked_counts
+
+
 # Data Access Layer
 def _flag_dnf(df, include_dnf):
     """Mark Did-Not-Finish rows. A DNF is saved with final_time_sec = 0 and formatted_time = 'DNF'
@@ -1093,8 +1123,10 @@ with tab_selection:
     st.write(
         "<b>Selection Criteria:</b> 16 Tickets total, including entry, hotel, breakfast, and transport. "
         "Guaranteed tickets are awarded to the <b>Top 4 Males</b> and <b>Top 4 Females</b>. "
-        "The remaining 8 tickets are split evenly, <b>4 male and 4 female</b>, with each gender's 4 spread "
-        "proportionately across active age categories depending on where that gender's top 4 fall. "
+        "The remaining 8 tickets are split evenly, <b>4 male and 4 female</b>, and are worked out separately "
+        "for each gender. Any age category with nobody in that gender's top 4 is served first, by its "
+        "fastest competitor; if places are left, they go to the age category with the fewest selected so far, "
+        "again taking the fastest time. Every place is decided on time. "
         "This gives 8 male and 8 female places in total.",
         unsafe_allow_html=True
     )
@@ -1140,30 +1172,6 @@ with tab_selection:
     all_ages = ['18-29', '30-34', '35-39', '40-44', '45-49', '50-54', '55+']
     REMAINING_PER_GENDER = 4
 
-    def _apportion(weights, avail, total):
-        """Largest-remainder split of `total` tickets across brackets, capped by who is available."""
-        wsum = sum(weights.values())
-        if wsum == 0:
-            return {a: 0 for a in weights}
-        raw = {a: weights[a] / wsum * total for a in weights}
-        quota = {a: int(raw[a]) for a in weights}
-        short = total - sum(quota.values())
-        for a in sorted(weights, key=lambda a: raw[a] - quota[a], reverse=True)[:short]:
-            quota[a] += 1
-        leftover = 0
-        for a in weights:
-            if quota[a] > avail[a]:
-                leftover += quota[a] - avail[a]
-                quota[a] = avail[a]
-        while leftover > 0:
-            spare = [a for a in weights if quota[a] < avail[a]]
-            if not spare:
-                break
-            spare.sort(key=lambda a: weights[a], reverse=True)
-            quota[spare[0]] += 1
-            leftover -= 1
-        return quota
-
     if len(males) >= 4 and len(females) >= 4:
         top_8 = pd.concat([males.head(4), females.head(4)])
         guaranteed_names = set(top_8['name'])
@@ -1176,18 +1184,7 @@ with tab_selection:
                 st.metric(label=f"Bracket {age}", value=top_8_ages.count(age))
 
         def _remaining_for(gender_df):
-            guaranteed_df = gender_df.head(4)
-            pool_g = gender_df[~gender_df['name'].isin(guaranteed_names)].copy()
-            g_counts = {a: int((guaranteed_df['age_group'] == a).sum()) for a in all_ages}
-            avail = {a: int((pool_g['age_group'] == a).sum()) for a in all_ages}
-            # Brackets already well represented in this gender's top 4 are weighted down
-            weights = {a: max(0, avail[a] - g_counts[a]) for a in all_ages}
-            if sum(weights.values()) == 0:
-                weights = dict(avail)
-            quota = _apportion(weights, avail, REMAINING_PER_GENDER)
-            parts = [pool_g[pool_g['age_group'] == a].sort_values(by="final_time_sec", ascending=True).head(quota[a])
-                     for a in all_ages if quota[a] > 0]
-            picked = pd.concat(parts).sort_values(by="final_time_sec", ascending=True) if parts else pool_g.head(0)
+            picked, quota = pick_remaining_tickets(gender_df, all_ages, REMAINING_PER_GENDER)
             picked = picked.copy()
             picked["Time"] = picked["final_time_sec"].apply(format_time)
             picked.index = range(1, len(picked) + 1)
@@ -1203,14 +1200,14 @@ with tab_selection:
             if len(rem_m) < REMAINING_PER_GENDER:
                 st.warning(f"Only {len(rem_m)} eligible male competitors available for these 4 tickets.")
             if len(rem_m):
-                st.table(rem_m[["name", "age_group", "Time"]])
+                st.table(rem_m[["name", "age_group", "Time", "why"]].rename(columns={"why": "Why"}))
         with col_rf:
             st.markdown("##### 🔴 Remaining 4 Female Tickets")
             st.caption("Quota by bracket: " + ", ".join(f"{a}: {quota_f[a]}" for a in all_ages if quota_f[a] > 0))
             if len(rem_f) < REMAINING_PER_GENDER:
                 st.warning(f"Only {len(rem_f)} eligible female competitors available for these 4 tickets.")
             if len(rem_f):
-                st.table(rem_f[["name", "age_group", "Time"]])
+                st.table(rem_f[["name", "age_group", "Time", "why"]].rename(columns={"why": "Why"}))
 
         st.markdown("---")
         st.write("<b>🏆 Full 16-Ticket Roster (Guaranteed 8 + Proportional 8):</b>", unsafe_allow_html=True)
