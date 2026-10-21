@@ -323,6 +323,21 @@ def get_gsheet_data_robust(url):
     except Exception as e:
         raise RuntimeError(f"CSV Parsing Failed: {e}")
 
+# Widget keys wiped after a successful log, so the marshal form returns to blank.
+IND_FORM_KEYS = ["ind_name", "ind_station", "ind_watch", "ind_cat", "ind_age",
+                 "ind_mins", "ind_secs", "ind_dnf"]
+REL_FORM_KEYS = ["rel_team", "rel_div", "rel_r1", "rel_r2", "rel_r3", "rel_r4",
+                 "rel_mins", "rel_secs", "rel_dnf"]
+
+
+def _clear_form(keys, prefix):
+    """Reset a marshal form. Must run BEFORE the widgets are created in a script run."""
+    for k in keys:
+        st.session_state.pop(k, None)
+    for pen in PENALTIES:
+        st.session_state.pop(f"{prefix}_{pen['code']}", None)
+
+
 # Data Access Layer
 def _flag_dnf(df, include_dnf):
     """Mark Did-Not-Finish rows. A DNF is saved with final_time_sec = 0 and formatted_time = 'DNF'
@@ -1370,6 +1385,11 @@ with tab_admin:
         
         if st.session_state.admin_mode == "individual":
             st.markdown("#### 🏃 Individual Competitor Entry Form")
+            if st.session_state.pop("_clear_ind", False):
+                _clear_form(IND_FORM_KEYS, "ind")
+            _ind_msg = st.session_state.pop("_ind_flash", None)
+            if _ind_msg:
+                st.success(_ind_msg)
             st.info("💡 Note: Keyboard shortcut 'Enter to submit' has been removed to prevent accidental entries. All fields start blank and the submit button unlocks automatically once all required fields are complete.")
             
             name = st.text_input("Competitor Name:", value="", placeholder="Enter full name...", key="ind_name")
@@ -1418,15 +1438,29 @@ with tab_admin:
                 st.button("Log Run and Sync Leaderboard", disabled=True, use_container_width=True, key="ind_sub_disabled")
             else:
                 if st.button("🚀 LOG INDIVIDUAL RUN AND SYNC LEADERBOARD", type="primary", use_container_width=True, key="ind_sub_enabled"):
+                    _synced_before = st.session_state.get('last_sync_time')
                     if ind_dnf:
                         write_individual_run(name, station, watch, category, age_group, 0, 0, 0, dnf=True)
+                        _done_msg = f"✅ {name} logged as DNF and synced. Form cleared for the next competitor."
                     else:
                         raw_tot = (mins or 0) * 60 + (secs or 0.0)
                         final_tot = raw_tot + penalties
                         write_individual_run(name, station, watch, category, age_group, raw_tot, penalties, final_tot)
+                        _done_msg = f"✅ {name} logged: {format_time(final_tot)} and synced. Form cleared for the next competitor."
+                    # Clear only after a confirmed cloud save; a local-only save keeps the form
+                    # and its warning on screen so nothing is lost or double-entered by accident.
+                    if st.session_state.get('last_sync_time') != _synced_before:
+                        st.session_state["_ind_flash"] = _done_msg
+                        st.session_state["_clear_ind"] = True
+                        st.rerun()
                     
         else:
             st.markdown("#### 👥 Relay Team Entry Form")
+            if st.session_state.pop("_clear_rel", False):
+                _clear_form(REL_FORM_KEYS, "rel")
+            _rel_msg = st.session_state.pop("_rel_flash", None)
+            if _rel_msg:
+                st.success(_rel_msg)
             st.info("💡 Note: Keyboard shortcut 'Enter to submit' has been removed to prevent accidental entries. All fields start blank and the submit button unlocks automatically once all required fields are complete.")
             
             relay_team_name = st.text_input("Relay Team Name:", value="", placeholder="Enter team name...", key="rel_team")
@@ -1477,12 +1511,19 @@ with tab_admin:
                 st.button("Log Relay Team and Sync Leaderboard", disabled=True, use_container_width=True, key="rel_sub_disabled")
             else:
                 if st.button("🚀 LOG RELAY TEAM AND SYNC LEADERBOARD", type="primary", use_container_width=True, key="rel_sub_enabled"):
+                    _synced_before = st.session_state.get('last_sync_time')
                     if rel_dnf:
                         write_relay_run(relay_team_name, division, r1, r2, r3, r4, 0, 0, 0, dnf=True)
+                        _done_msg = f"✅ {relay_team_name} logged as DNF and synced. Form cleared for the next team."
                     else:
                         raw_tot = (mins or 0) * 60 + (secs or 0.0)
                         final_tot = raw_tot + penalties
                         write_relay_run(relay_team_name, division, r1, r2, r3, r4, raw_tot, penalties, final_tot)
+                        _done_msg = f"✅ {relay_team_name} logged: {format_time(final_tot)} and synced. Form cleared for the next team."
+                    if st.session_state.get('last_sync_time') != _synced_before:
+                        st.session_state["_rel_flash"] = _done_msg
+                        st.session_state["_clear_rel"] = True
+                        st.rerun()
 
     else:
         st.info("Enter password '*******' in the field above to activate the marshal logger panel.")
