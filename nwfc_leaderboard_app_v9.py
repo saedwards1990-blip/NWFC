@@ -1268,6 +1268,16 @@ def ticket_manager_ui():
             if total >= TICKET_TOTAL:
                 st.caption("Restore is disabled while 16 places are held. Mark a replacement as declined first.")
 
+    # Reset everything (e.g. after testing). Needs the word RESET typed, so it cannot be done by accident.
+    with st.expander("🧹 Reset all ticket offers (admin only)"):
+        st.warning("This clears every ticket status (offered, confirmed and declined) and puts the Ticket Selection "
+                   "page back to the live calculated list. It cannot be undone, so only use it to start again.")
+        _typed = st.text_input("Type RESET to confirm:", key="tkt_reset_txt")
+        if st.button("🧹 Reset all ticket offers", key="tkt_reset", type="primary",
+                     disabled=(str(_typed or "").strip() != "RESET")):
+            _items = [(r['name'], r['category'], '') for _, r in df[stat != ''].iterrows()]
+            _tkt_apply(_items, "✅ All ticket offers cleared. The Ticket Selection page is back to the live calculated list.")
+
 
 tab_leaderboard, tab_selection, tab_admin, tab_course = st.tabs([
     "📊 Live Standings",
