@@ -400,7 +400,7 @@ def write_individual_run(name, station, watch, category, age_group, raw_time, pe
                 "final_time_sec": str(final_time),
                 "formatted_time": formatted_t
             }
-            response = requests.post(APPS_SCRIPT_URL, data=payload, timeout=10)
+            response = requests.post(APPS_SCRIPT_URL, data=payload, timeout=30)
             res_text = response.text
             if "SUCCESS" in res_text:
                 st.session_state['last_sync_time'] = datetime.now()
@@ -408,6 +408,11 @@ def write_individual_run(name, station, watch, category, age_group, raw_time, pe
                 return True
             else:
                 st.error(f"Apps Script Error: {res_text}")
+        except requests.exceptions.Timeout:
+            # Google answered too slowly. The row MAY already be in the Sheet, so warn the
+            # marshal to check before logging again (a blind retry could create a duplicate).
+            st.error("⏳ Google Sheets did not reply in time (30s). This entry MAY have saved to the cloud. "
+                     "CHECK THE GOOGLE SHEET / LEADERBOARD before logging it again, to avoid a duplicate.")
         except Exception as e:
             st.error(f"Failed to write to Google Sheets: {e}. Attempting local database write...")
 
@@ -442,7 +447,7 @@ def write_relay_run(team_name, division, r1, r2, r3, r4, raw_time, penalties, fi
                 "final_time_sec": str(final_time),
                 "formatted_time": formatted_t
             }
-            response = requests.post(APPS_SCRIPT_URL, data=payload, timeout=10)
+            response = requests.post(APPS_SCRIPT_URL, data=payload, timeout=30)
             res_text = response.text
             if "SUCCESS" in res_text:
                 st.session_state['last_sync_time'] = datetime.now()
@@ -450,6 +455,11 @@ def write_relay_run(team_name, division, r1, r2, r3, r4, raw_time, penalties, fi
                 return True
             else:
                 st.error(f"Apps Script Error: {res_text}")
+        except requests.exceptions.Timeout:
+            # Google answered too slowly. The row MAY already be in the Sheet, so warn the
+            # marshal to check before logging again (a blind retry could create a duplicate).
+            st.error("⏳ Google Sheets did not reply in time (30s). This entry MAY have saved to the cloud. "
+                     "CHECK THE GOOGLE SHEET / LEADERBOARD before logging it again, to avoid a duplicate.")
         except Exception as e:
             st.error(f"Failed to write to Google Sheets: {e}. Attempting local database write...")
 
