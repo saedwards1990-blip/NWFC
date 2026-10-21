@@ -960,6 +960,19 @@ def build_observation_sheets_pdf():
 # ==========================================================================
 FULL_COURSE_VIDEO_URL = "https://youtu.be/8e4w8Q7ivGY"
 
+# --- Welsh Firefighter Challenge comparison (June 2027) --------------------------------------
+# The Welsh course is longer (46m vs 35m, roughly 65-75m more running/carrying overall) and has a
+# 6:00 time cap for everyone. The two conversion methods below are ESTIMATES, based on one
+# experienced competitor who ran both courses (about +40s). Edit them here if better data arrives.
+WELSH_CAP_SEC = 360        # 6:00, same for every age and gender
+WELSH_ADD_SEC = 40         # method 1: add a flat 40 seconds
+WELSH_RATIO = 1.34         # method 2: multiply by 1.34 (slower competitors lose more time)
+
+
+def _mmss(sec):
+    sec = max(0, int(round(sec)))
+    return f"{sec // 60}:{sec % 60:02d}"
+
 
 def _challenge_body():
     st.markdown(
@@ -970,6 +983,11 @@ def _challenge_body():
         st.video(FULL_COURSE_VIDEO_URL)
     st.markdown("**The 8 stations, in order:**")
     st.markdown("\n".join(f"- {_s['title']}" for _s in COURSE_STATIONS))
+    st.caption(
+        "Heads-up: the Welsh Firefighter Challenge (June 2027) uses a longer course and has a 6:00 time cap "
+        "for everyone. Everyone is welcome here whatever their ability. Our Ticket Selection tab has a calculator "
+        "that estimates your Welsh time."
+    )
     st.info(
         "Want the detail? Open the **📖 Competition Information** tab (top of the page) for the course "
         "layout, a video and rules for every station, the relay legs, and the full penalty list."
@@ -1131,6 +1149,42 @@ with tab_selection:
         unsafe_allow_html=True
     )
     
+    st.warning(
+        "**Before you accept a ticket:** everyone is welcome to take part, whatever their ability. The Welsh "
+        "Firefighter Challenge (June 2027) is on a **longer course** than ours, and has a **6:00 time cap for "
+        "everyone**: if you don't finish inside 6 minutes you are timed out (DNF). You have until June to build "
+        "your fitness. Use the estimator below to see roughly what your time here equates to on the Welsh course."
+    )
+    with st.expander("🧮 Welsh course time estimator", expanded=False):
+        st.caption(
+            "Enter your time from this event. The Welsh course adds roughly 65-75m of running and carrying, so "
+            "your time will be slower there. Two estimates are shown because the extra distance costs slower "
+            "competitors more time. These are guides only, based on one experienced competitor who has run both courses."
+        )
+        _ec1, _ec2 = st.columns(2)
+        with _ec1:
+            _em = st.number_input("Your minutes:", min_value=0, max_value=10, value=0, step=1, key="est_mins")
+        with _ec2:
+            _es = st.number_input("Your seconds:", min_value=0.0, max_value=59.999, value=0.0, step=1.0,
+                                  format="%.3f", key="est_secs")
+        _et = _em * 60 + _es
+        if _et > 0:
+            _a, _b = _et + WELSH_ADD_SEC, _et * WELSH_RATIO
+            _lo, _hi = min(_a, _b), max(_a, _b)
+            st.markdown(f"**Estimated Welsh time: {_mmss(_lo)} to {_mmss(_hi)}**  (cap is {_mmss(WELSH_CAP_SEC)})")
+            if _hi <= WELSH_CAP_SEC:
+                st.success("✅ Likely to finish inside the 6:00 cap.")
+            elif _lo <= WELSH_CAP_SEC:
+                st.warning("⚠️ Borderline: you could finish either side of the cap. Training between now and "
+                           "June could make the difference.")
+            else:
+                st.error("❗ Likely to be timed out at the 6:00 cap as things stand. You have until June 2027 "
+                         "to improve, and you are still very welcome to come and experience it.")
+            st.caption(f"To be comfortably inside the cap, aim for about {_mmss(WELSH_CAP_SEC / WELSH_RATIO)} "
+                       f"or faster on our course.")
+        else:
+            st.caption("Enter a time above to see your estimate.")
+
     df_all_ind = get_individuals_data()
     
     males = pd.DataFrame()
