@@ -324,15 +324,34 @@ def get_gsheet_data_robust(url):
         raise RuntimeError(f"CSV Parsing Failed: {e}")
 
 # Data Access Layer
-def get_individuals_data():
+def _flag_dnf(df, include_dnf):
+    """Mark Did-Not-Finish rows. A DNF is saved with final_time_sec = 0 and formatted_time = 'DNF'
+    (a genuine finished run can never be 0 because the form requires a time > 0). Every existing
+    caller gets finishers only; the live leaderboard asks for include_dnf=True."""
+    if df is None or df.empty or 'final_time_sec' not in df.columns:
+        if df is not None:
+            df['is_dnf'] = False
+        return df
+    fin = pd.to_numeric(df['final_time_sec'], errors='coerce')
+    if 'formatted_time' in df.columns:
+        ft = df['formatted_time'].astype(str).str.strip().str.upper()
+    else:
+        ft = pd.Series('', index=df.index)
+    df = df.copy()
+    df['final_time_sec'] = fin
+    df['is_dnf'] = (ft == 'DNF') | (fin == 0)
+    df = df[fin.notna() | (ft == 'DNF')]
+    if not include_dnf:
+        df = df[~df['is_dnf']]
+    return df
+
+def get_individuals_data(include_dnf=False):
     if GSHEET_INDIVIDUALS_CSV:
         try:
             real_url = convert_to_export_url(GSHEET_INDIVIDUALS_CSV)
             df = get_gsheet_data_robust(real_url)
             if 'final_time_sec' in df.columns:
-                df['final_time_sec'] = pd.to_numeric(df['final_time_sec'], errors='coerce')
-                df = df.dropna(subset=['final_time_sec'])
-                return df
+                return _flag_dnf(df, include_dnf)
             elif df.empty:
                 return pd.DataFrame(columns=['id', 'name', 'station', 'watch', 'category', 'age_group', 'raw_time_sec', 'penalties_sec', 'final_time_sec', 'formatted_time'])
         except Exception as e:
@@ -341,17 +360,15 @@ def get_individuals_data():
     conn = sqlite3.connect(DB_PATH)
     df = pd.read_sql_query("SELECT * FROM individuals ORDER BY final_time_sec ASC", conn)
     conn.close()
-    return df
+    return _flag_dnf(df, include_dnf)
 
-def get_relays_data():
+def get_relays_data(include_dnf=False):
     if GSHEET_RELAYS_CSV:
         try:
             real_url = convert_to_export_url(GSHEET_RELAYS_CSV)
             df = get_gsheet_data_robust(real_url)
             if 'final_time_sec' in df.columns:
-                df['final_time_sec'] = pd.to_numeric(df['final_time_sec'], errors='coerce')
-                df = df.dropna(subset=['final_time_sec'])
-                return df
+                return _flag_dnf(df, include_dnf)
             elif df.empty:
                 return pd.DataFrame(columns=['id', 'station', 'watch', 'division', 'runner_1', 'runner_2', 'runner_3', 'runner_4', 'raw_time_sec', 'penalties_sec', 'final_time_sec', 'formatted_time'])
         except Exception as e:
@@ -360,10 +377,10 @@ def get_relays_data():
     conn = sqlite3.connect(DB_PATH)
     df = pd.read_sql_query("SELECT * FROM relays ORDER BY final_time_sec ASC", conn)
     conn.close()
-    return df
+    return _flag_dnf(df, include_dnf)
 
-def write_individual_run(name, station, watch, category, age_group, raw_time, penalties, final_time):
-    formatted_t = format_time(final_time)
+def write_individual_run(name, station, watch, category, age_group, raw_time, penalties, final_time, dnf=False):
+    formatted_t = "DNF" if dnf else format_time(final_time)
     if APPS_SCRIPT_URL:
         try:
             payload = {
@@ -401,8 +418,8 @@ def write_individual_run(name, station, watch, category, age_group, raw_time, pe
     st.warning(f"⚠️ NOT SAVED TO CLOUD — logged locally only for {name}: {formatted_t}. Write this down on paper now as a backup.")
     return True
 
-def write_relay_run(team_name, division, r1, r2, r3, r4, raw_time, penalties, final_time):
-    formatted_t = format_time(final_time)
+def write_relay_run(team_name, division, r1, r2, r3, r4, raw_time, penalties, final_time, dnf=False):
+    formatted_t = "DNF" if dnf else format_time(final_time)
     if APPS_SCRIPT_URL:
         try:
             payload = {
@@ -963,7 +980,7 @@ with tab_leaderboard:
                 "All Age Groups", "18-29", "30-34", "35-39", "40-44", "45-49", "50-54", "55+"
             ])
 
-        df_ind = get_individuals_data()
+        df_ind = get_individuals_data(include_dnf=True)
 
         if not df_ind.empty:
             if category_filter == "All Operational Staff":
@@ -979,9 +996,13 @@ with tab_leaderboard:
                 df_filtered = df_filtered[df_filtered['age_group'] == age_filter].copy()
 
             if not df_filtered.empty:
-                df_filtered = df_filtered.sort_values(by="final_time_sec", ascending=True)
-                df_filtered["Time"] = df_filtered["final_time_sec"].apply(format_time)
-                df_filtered.index = range(1, len(df_filtered) + 1)
+                # Finishers ranked by time; DNFs listed after them, unranked.
+                _fin = df_filtered[~df_filtered["is_dnf"]].sort_values(by="final_time_sec", ascending=True)
+                _dnf = df_filtered[df_filtered["is_dnf"]]
+                df_filtered = pd.concat([_fin, _dnf])
+                df_filtered["Time"] = ["DNF" if _d else format_time(_t)
+                                       for _d, _t in zip(df_filtered["is_dnf"], df_filtered["final_time_sec"])]
+                _pos_list = [str(i) for i in range(1, len(_fin) + 1)] + ["–"] * len(_dnf)
 
                 # Time sits right after the name so it is visible first on a phone.
                 display_cols = ["name", "Time", "age_group", "station", "watch"]
@@ -991,7 +1012,7 @@ with tab_leaderboard:
                     "name": "Name", "category": "Category", "age_group": "Age",
                     "station": "Station", "watch": "Watch"})
                 _tbl = _tbl.reset_index(drop=True)
-                _tbl.insert(0, "Pos", [str(i) for i in range(1, len(_tbl) + 1)])
+                _tbl.insert(0, "Pos", _pos_list)
                 _tbl.index = [""] * len(_tbl)  # blank index so numbers are not doubled
                 st.table(_tbl)
             else:
@@ -1005,7 +1026,7 @@ with tab_leaderboard:
             "All Relay Teams", "Male", "Female", "Mixed"
         ])
 
-        df_rel = get_relays_data()
+        df_rel = get_relays_data(include_dnf=True)
 
         if not df_rel.empty:
             if division_filter == "All Relay Teams":
@@ -1014,9 +1035,13 @@ with tab_leaderboard:
                 df_filtered_rel = df_rel[df_rel['division'] == division_filter].copy()
 
             if not df_filtered_rel.empty:
-                df_filtered_rel = df_filtered_rel.sort_values(by="final_time_sec", ascending=True)
-                df_filtered_rel["Time"] = df_filtered_rel["final_time_sec"].apply(format_time)
-                df_filtered_rel.index = range(1, len(df_filtered_rel) + 1)
+                # Finishers ranked by time; DNFs listed after them, unranked.
+                _rfin = df_filtered_rel[~df_filtered_rel["is_dnf"]].sort_values(by="final_time_sec", ascending=True)
+                _rdnf = df_filtered_rel[df_filtered_rel["is_dnf"]]
+                df_filtered_rel = pd.concat([_rfin, _rdnf])
+                df_filtered_rel["Time"] = ["DNF" if _d else format_time(_t)
+                                           for _d, _t in zip(df_filtered_rel["is_dnf"], df_filtered_rel["final_time_sec"])]
+                _rpos_list = [str(i) for i in range(1, len(_rfin) + 1)] + ["–"] * len(_rdnf)
 
                 # The Sheet header for the team name can differ from the local DB
                 # ("station"), so match any sensible variant instead of dropping the column.
@@ -1039,7 +1064,7 @@ with tab_leaderboard:
                     "runner_1": "Runner 1", "runner_2": "Runner 2",
                     "runner_3": "Runner 3", "runner_4": "Runner 4"})
                 _rel_tbl = _rel_tbl.reset_index(drop=True)
-                _rel_tbl.insert(0, "Pos", [str(i) for i in range(1, len(_rel_tbl) + 1)])
+                _rel_tbl.insert(0, "Pos", _rpos_list)
                 _rel_tbl.index = [""] * len(_rel_tbl)  # blank index so numbers are not doubled
                 st.table(_rel_tbl)
             else:
@@ -1360,6 +1385,9 @@ with tab_admin:
             with col_s:
                 secs = st.number_input("Seconds (and ms):", min_value=0.0, max_value=59.999, value=0.0, step=1.0, format="%.3f", key="ind_secs")
             
+            ind_dnf = st.checkbox("🚫 Did Not Finish (DNF) — tick this ONLY if the competitor did not complete "
+                                  "the course. Leave the time at 0:00.", key="ind_dnf")
+
             st.markdown("##### ⚠️ Rule Violations & Penalties")
             penalties = 0
             for p in PENALTIES:
@@ -1367,10 +1395,14 @@ with tab_admin:
                     continue
                 if st.checkbox(f"{p['desc']} ({p['label']})", key=f"ind_{p['code']}"):
                     penalties += p["pts"]
-            
-            # Validation check
+            if ind_dnf:
+                penalties = 0  # penalties are meaningless on a DNF
+
+            # Validation check: a time means a finished run, the DNF tick means no time.
             ind_time_valid = (mins is not None or secs is not None) and ((mins or 0) * 60 + (secs or 0.0) > 0)
-            ind_ready = bool(name and name.strip() and station and watch and category and age_group and ind_time_valid)
+            ind_dnf_conflict = bool(ind_dnf and ind_time_valid)
+            ind_result_ok = (ind_time_valid or ind_dnf) and not ind_dnf_conflict
+            ind_ready = bool(name and name.strip() and station and watch and category and age_group and ind_result_ok)
             
             st.markdown("<br>", unsafe_allow_html=True)
             if not ind_ready:
@@ -1380,14 +1412,18 @@ with tab_admin:
                 if not watch: missing.append("Watch/Dept")
                 if not category: missing.append("Category")
                 if not age_group: missing.append("Age Bracket")
-                if not ind_time_valid: missing.append("Stopwatch Time > 0")
+                if ind_dnf_conflict: missing.append("EITHER clear the time OR untick DNF (not both)")
+                elif not ind_result_ok: missing.append("Stopwatch Time > 0, or tick DNF")
                 st.warning(f"🔒 Submission Restricted: Please complete the following required fields to enable the submit button: **{', '.join(missing)}**.")
                 st.button("Log Run and Sync Leaderboard", disabled=True, use_container_width=True, key="ind_sub_disabled")
             else:
                 if st.button("🚀 LOG INDIVIDUAL RUN AND SYNC LEADERBOARD", type="primary", use_container_width=True, key="ind_sub_enabled"):
-                    raw_tot = (mins or 0) * 60 + (secs or 0.0)
-                    final_tot = raw_tot + penalties
-                    write_individual_run(name, station, watch, category, age_group, raw_tot, penalties, final_tot)
+                    if ind_dnf:
+                        write_individual_run(name, station, watch, category, age_group, 0, 0, 0, dnf=True)
+                    else:
+                        raw_tot = (mins or 0) * 60 + (secs or 0.0)
+                        final_tot = raw_tot + penalties
+                        write_individual_run(name, station, watch, category, age_group, raw_tot, penalties, final_tot)
                     
         else:
             st.markdown("#### 👥 Relay Team Entry Form")
@@ -1409,15 +1445,22 @@ with tab_admin:
             with col_s:
                 secs = st.number_input("Relay Seconds (and ms):", min_value=0.0, max_value=59.999, value=0.0, step=1.0, format="%.3f", key="rel_secs")
             
+            rel_dnf = st.checkbox("🚫 Did Not Finish (DNF) — tick this ONLY if the team did not complete "
+                                  "the course. Leave the time at 0:00.", key="rel_dnf")
+
             st.markdown("##### ⚠️ Rule Violations & Penalties")
             penalties = 0
             for p in PENALTIES:
                 if st.checkbox(f"{p['desc']} ({p['label']})", key=f"rel_{p['code']}"):
                     penalties += p["pts"]
-            
-            # Validation check
+            if rel_dnf:
+                penalties = 0  # penalties are meaningless on a DNF
+
+            # Validation check: a time means a finished run, the DNF tick means no time.
             rel_time_valid = (mins is not None or secs is not None) and ((mins or 0) * 60 + (secs or 0.0) > 0)
-            rel_ready = bool(relay_team_name and relay_team_name.strip() and division and r1 and r1.strip() and r2 and r2.strip() and r3 and r3.strip() and r4 and r4.strip() and rel_time_valid)
+            rel_dnf_conflict = bool(rel_dnf and rel_time_valid)
+            rel_result_ok = (rel_time_valid or rel_dnf) and not rel_dnf_conflict
+            rel_ready = bool(relay_team_name and relay_team_name.strip() and division and r1 and r1.strip() and r2 and r2.strip() and r3 and r3.strip() and r4 and r4.strip() and rel_result_ok)
             
             st.markdown("<br>", unsafe_allow_html=True)
             if not rel_ready:
@@ -1428,14 +1471,18 @@ with tab_admin:
                 if not (r2 and r2.strip()): missing.append("Runner 2")
                 if not (r3 and r3.strip()): missing.append("Runner 3")
                 if not (r4 and r4.strip()): missing.append("Runner 4")
-                if not rel_time_valid: missing.append("Stopwatch Time > 0")
+                if rel_dnf_conflict: missing.append("EITHER clear the time OR untick DNF (not both)")
+                elif not rel_result_ok: missing.append("Stopwatch Time > 0, or tick DNF")
                 st.warning(f"🔒 Submission Restricted: Please complete the following required fields to enable the submit button: **{', '.join(missing)}**.")
                 st.button("Log Relay Team and Sync Leaderboard", disabled=True, use_container_width=True, key="rel_sub_disabled")
             else:
                 if st.button("🚀 LOG RELAY TEAM AND SYNC LEADERBOARD", type="primary", use_container_width=True, key="rel_sub_enabled"):
-                    raw_tot = (mins or 0) * 60 + (secs or 0.0)
-                    final_tot = raw_tot + penalties
-                    write_relay_run(relay_team_name, division, r1, r2, r3, r4, raw_tot, penalties, final_tot)
+                    if rel_dnf:
+                        write_relay_run(relay_team_name, division, r1, r2, r3, r4, 0, 0, 0, dnf=True)
+                    else:
+                        raw_tot = (mins or 0) * 60 + (secs or 0.0)
+                        final_tot = raw_tot + penalties
+                        write_relay_run(relay_team_name, division, r1, r2, r3, r4, raw_tot, penalties, final_tot)
 
     else:
         st.info("Enter password '*******' in the field above to activate the marshal logger panel.")
