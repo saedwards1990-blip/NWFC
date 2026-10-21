@@ -1007,6 +1007,268 @@ else:
     with st.expander("🎥 NEW HERE?  What does the challenge involve?  Tap to see", expanded=False):
         _challenge_body()
 
+# ==========================================================================
+# TICKET OFFERS (end-of-event): publish the 16, then handle declines.
+# State lives in the Google Sheet `individuals` tab, column `ticket_status`:
+#   (blank) not selected | OFFERED | NEW_OFFER (replacement, still to be contacted)
+#   | CONFIRMED | DECLINED
+# ==========================================================================
+TICKET_AGES = ['18-29', '30-34', '35-39', '40-44', '45-49', '50-54', '55+']
+TICKET_TOTAL = 16
+TICKET_HELD = ("OFFERED", "NEW_OFFER", "CONFIRMED")
+
+
+def _ticket_status_series(df):
+    if df is not None and 'ticket_status' in df.columns:
+        return df['ticket_status'].fillna('').astype(str).str.strip().str.upper()
+    return pd.Series('', index=df.index if df is not None else [])
+
+
+def ticket_is_published(df):
+    if df is None or df.empty:
+        return False
+    return bool(_ticket_status_series(df).isin(TICKET_HELD + ("DECLINED",)).any())
+
+
+def _fair_share_next(pool, held, all_ages):
+    """Fastest person from the age bracket with the fewest ticket holders (time breaks ties)."""
+    rep = {a: int((held['age_group'] == a).sum()) for a in all_ages}
+    cands = {}
+    for a in all_ages:
+        sub = pool[pool['age_group'] == a]
+        if len(sub):
+            cands[a] = sub['final_time_sec'].idxmin()
+    if not cands:
+        return None, None
+    a = min(cands, key=lambda b: (rep[b], pool.loc[cands[b], 'final_time_sec']))
+    return cands[a], ("New age bracket" if rep[a] == 0 else "Fair share")
+
+
+def ticket_next_for_gender(df, category, all_ages=TICKET_AGES, n_guaranteed=4):
+    """Who should be offered the next place for this category? Returns (index_label, reason) or (None, None).
+    1. The fastest n_guaranteed non-declined competitors must all hold a place (time based).
+    2. Otherwise the fair-share age-bracket rule, counting everyone currently holding a place.
+    Nobody who already holds a place is ever displaced."""
+    stat = _ticket_status_series(df)
+    g = df[df['category'] == category].copy()
+    g['_st'] = stat.loc[g.index]
+    g = g.sort_values(by="final_time_sec", ascending=True)
+    nd = g[g['_st'] != 'DECLINED']
+    for idx, row in nd.head(n_guaranteed).iterrows():
+        if row['_st'] not in TICKET_HELD:
+            return idx, "Guaranteed place (top 4 by time)"
+    held = nd[nd['_st'].isin(TICKET_HELD)]
+    pool = nd[~nd['_st'].isin(TICKET_HELD)]
+    return _fair_share_next(pool, held, all_ages)
+
+
+def ticket_initial_offers(df, all_ages=TICKET_AGES):
+    """The provisional 16 (top 4 + fair-share 4, per gender) as {category: [index labels]}."""
+    out = {}
+    for cat in ("Operational Male", "Operational Female"):
+        g = df[df['category'] == cat].sort_values(by="final_time_sec", ascending=True)
+        picked, _ = pick_remaining_tickets(g, all_ages, 4)
+        out[cat] = list(g.head(4).index) + list(picked.index)
+    return out
+
+
+def write_ticket_statuses(items):
+    """items: list of (name, category, status). One call to the Apps Script. Returns (ok, message)."""
+    if not APPS_SCRIPT_URL:
+        return False, "No Apps Script URL is configured, so ticket decisions cannot be saved."
+    payload = {
+        "action": "set_ticket_status",
+        "items": json.dumps([{"name": n, "category": c, "status": s} for n, c, s in items]),
+    }
+    try:
+        resp = requests.post(APPS_SCRIPT_URL, data=payload, timeout=45)
+        text = resp.text.strip()
+        if "SUCCESS" in text:
+            return True, "Saved"
+        return False, f"Apps Script said: {text[:300]}"
+    except requests.exceptions.Timeout:
+        return False, ("Google did not reply in time. The change MAY have saved. Reload this page and check "
+                       "before pressing the button again.")
+    except Exception as e:
+        return False, f"Could not reach Google Sheets: {e}"
+
+
+def _tkt_label(row):
+    return f"{row['name']} ({row['age_group']}, {format_time(row['final_time_sec'])})"
+
+
+def _tkt_apply(items, ok_msg, kind="success"):
+    with st.spinner("Saving to Google Sheets..."):
+        ok, msg = write_ticket_statuses(items)
+    if ok:
+        st.session_state["_tkt_flash"] = (kind, ok_msg)
+        st.rerun()
+    else:
+        st.error(f"❌ Not saved. {msg}")
+
+
+def ticket_manager_ui():
+    st.markdown("#### 🎟️ Ticket Offers Manager (end of event)")
+    st.caption(
+        "Use this once all runs are in. **Publish** freezes the current 16 as offers. After that, mark each person "
+        "Confirmed or Declined as they reply; a decline automatically offers the place to the next person in line "
+        "(same gender), who appears in the 'needs contacting' list. Nobody who already holds a place is ever bumped."
+    )
+    _flash = st.session_state.pop("_tkt_flash", None)
+    if _flash:
+        (st.success if _flash[0] == "success" else st.warning)(_flash[1])
+
+    if not APPS_SCRIPT_URL:
+        st.error("Cloud (Apps Script) is not configured, so ticket decisions cannot be saved.")
+        return
+    if st.button("🔌 Test ticket connection", key="tkt_test"):
+        try:
+            r = requests.post(APPS_SCRIPT_URL, data={"action": "ping_tickets"}, timeout=45).text.strip()
+            if "SUCCESS" in r:
+                st.success("✅ Connected: the Apps Script is updated and the ticket_status column exists.")
+            else:
+                st.error(f"❌ {r[:300]}")
+        except Exception as e:
+            st.error(f"❌ Could not reach Google Sheets: {e}")
+
+    df = get_individuals_data()
+    if df.empty or 'ticket_status' not in df.columns:
+        st.warning("No results yet, or the `ticket_status` column is missing from the Google Sheet "
+                   "`individuals` tab (add it as the last column header).")
+        return
+
+    # Duplicate names make it impossible to tell people apart: flag them loudly.
+    _key = df['name'].astype(str).str.strip().str.lower() + "|" + df['category'].astype(str).str.strip().str.lower()
+    _dups = sorted(set(df.loc[_key.duplicated(keep=False), 'name'].astype(str)))
+    if _dups:
+        st.warning("⚠️ Duplicate competitor names in the Sheet (same name and class): **" + ", ".join(_dups) +
+                   "**. Ticket decisions cannot be saved for these until the duplicate rows are fixed in the Sheet.")
+
+    stat = _ticket_status_series(df)
+    cats = [("Operational Male", "🟢 Men"), ("Operational Female", "🔴 Women")]
+
+    # ---------------- Not yet published ----------------
+    if not ticket_is_published(df):
+        ok_m = (df['category'] == 'Operational Male').sum() >= 4
+        ok_f = (df['category'] == 'Operational Female').sum() >= 4
+        if not (ok_m and ok_f):
+            st.warning("Need at least 4 male and 4 female finishers before offers can be published.")
+            return
+        initial = ticket_initial_offers(df)
+        st.info("**Not published yet.** This is the current selection that would be published:")
+        cols = st.columns(2)
+        for col, (cat, title) in zip(cols, cats):
+            with col:
+                st.markdown(f"**{title}**")
+                for idx in initial[cat]:
+                    st.write("• " + _tkt_label(df.loc[idx]))
+        sure = st.checkbox("I understand this freezes the list and starts the offers.", key="tkt_pub_sure")
+        if st.button("📌 PUBLISH OFFERS (freeze these 16)", type="primary", disabled=not sure, key="tkt_publish"):
+            items = [(df.loc[i, 'name'], cat, 'OFFERED') for cat, _ in cats for i in initial[cat]]
+            _tkt_apply(items, "✅ Offers published. Contact each person, then mark them Confirmed or Declined here.")
+        return
+
+    # ---------------- Published ----------------
+    held = df[stat.isin(TICKET_HELD)]
+    total = len(held)
+    n_m = int((held['category'] == 'Operational Male').sum())
+    n_f = int((held['category'] == 'Operational Female').sum())
+    n_conf = int((stat == 'CONFIRMED').sum())
+    st.markdown(f"**Places held: {total} of {TICKET_TOTAL}**  (men {n_m}, women {n_f}).  Confirmed: {n_conf}.")
+
+    # Pending decline confirmation
+    pend = st.session_state.get("_tkt_pending_decline")
+    if pend is not None and pend in df.index:
+        prow = df.loc[pend]
+        st.warning(f"Mark **{prow['name']}** as DECLINED? The next person in line will be offered the place.")
+        cy, cn = st.columns(2)
+        with cy:
+            if st.button("Yes, they declined", type="primary", key="tkt_dec_yes", use_container_width=True):
+                sim = df.copy()
+                sim.loc[pend, 'ticket_status'] = 'DECLINED'
+                nxt, why = ticket_next_for_gender(sim, prow['category'])
+                items = [(prow['name'], prow['category'], 'DECLINED')]
+                if nxt is not None:
+                    items.append((df.loc[nxt, 'name'], prow['category'], 'NEW_OFFER'))
+                    msg = (f"{prow['name']} declined. Replacement: {_tkt_label(df.loc[nxt])} ({why}). "
+                           f"They now need contacting.")
+                else:
+                    who = "women" if prow['category'] == 'Operational Female' else "men"
+                    msg = (f"{prow['name']} declined. No eligible {who} are left in line, so the place is vacant. "
+                           f"You can offer it to the other gender below.")
+                st.session_state["_tkt_pending_decline"] = None
+                _tkt_apply(items, msg, kind="warning" if nxt is None else "success")
+        with cn:
+            if st.button("Cancel", key="tkt_dec_no", use_container_width=True):
+                st.session_state["_tkt_pending_decline"] = None
+                st.rerun()
+
+    # Needs contacting
+    newo = df[stat == 'NEW_OFFER']
+    if len(newo):
+        st.markdown("##### 📞 Needs contacting (replacements)")
+        for idx, row in newo.iterrows():
+            c1, c2 = st.columns([3, 1])
+            with c1:
+                st.write(f"**{_tkt_label(row)}** — {'Men' if row['category'] == 'Operational Male' else 'Women'}")
+            with c2:
+                if st.button("Mark contacted", key=f"tkt_ct_{idx}", use_container_width=True):
+                    _tkt_apply([(row['name'], row['category'], 'OFFERED')], f"{row['name']} marked as contacted.")
+
+    # Roster with buttons
+    for cat, title in cats:
+        sub = df[(df['category'] == cat) & stat.isin(TICKET_HELD)].sort_values(by="final_time_sec")
+        st.markdown(f"##### {title} ({len(sub)})")
+        for idx, row in sub.iterrows():
+            s_now = stat.loc[idx]
+            badge = {"CONFIRMED": "✅ Confirmed", "OFFERED": "⏳ Offered", "NEW_OFFER": "📞 To contact"}.get(s_now, s_now)
+            c1, c2, c3, c4 = st.columns([4, 2, 2, 2])
+            with c1:
+                st.write(_tkt_label(row))
+            with c2:
+                st.write(badge)
+            with c3:
+                if s_now != 'CONFIRMED':
+                    if st.button("Confirm", key=f"tkt_cf_{idx}", use_container_width=True):
+                        _tkt_apply([(row['name'], row['category'], 'CONFIRMED')], f"{row['name']} confirmed.")
+            with c4:
+                if st.button("Declined", key=f"tkt_dc_{idx}", use_container_width=True):
+                    st.session_state["_tkt_pending_decline"] = idx
+                    st.rerun()
+
+    # Vacant places -> other gender / extra place
+    st.markdown("##### ➕ Offer an extra place")
+    st.caption("Use this when one gender has no eligible competitors left, to give the place to the other. "
+               "It uses the same fair-share rule. Disabled once 16 places are held.")
+    ca, cb = st.columns(2)
+    for col, (cat, title) in zip((ca, cb), cats):
+        with col:
+            nxt, why = ticket_next_for_gender(df, cat)
+            label = f"Offer a place to the next {'man' if cat == 'Operational Male' else 'woman'}"
+            if nxt is None:
+                st.caption(f"No eligible {'men' if cat == 'Operational Male' else 'women'} left in line.")
+            else:
+                st.caption(f"Next in line: {_tkt_label(df.loc[nxt])} ({why})")
+                if st.button(label, key=f"tkt_extra_{cat}", disabled=total >= TICKET_TOTAL, use_container_width=True):
+                    _tkt_apply([(df.loc[nxt, 'name'], cat, 'NEW_OFFER')],
+                               f"{df.loc[nxt, 'name']} offered a place. They now need contacting.")
+
+    # Declined list with restore
+    dec = df[stat == 'DECLINED']
+    if len(dec):
+        with st.expander(f"Declined ({len(dec)}) — admin only"):
+            for idx, row in dec.iterrows():
+                c1, c2 = st.columns([4, 2])
+                with c1:
+                    st.write(_tkt_label(row))
+                with c2:
+                    if st.button("↩ Restore", key=f"tkt_rs_{idx}", disabled=total >= TICKET_TOTAL,
+                                 use_container_width=True):
+                        _tkt_apply([(row['name'], row['category'], 'OFFERED')], f"{row['name']} restored to the offers.")
+            if total >= TICKET_TOTAL:
+                st.caption("Restore is disabled while 16 places are held. Mark a replacement as declined first.")
+
+
 tab_leaderboard, tab_selection, tab_admin, tab_course = st.tabs([
     "📊 Live Standings",
     "🎟️ Swansea 2027 Ticket Selection",
@@ -1186,96 +1448,118 @@ with tab_selection:
             st.caption("Enter a time above to see your estimate.")
 
     df_all_ind = get_individuals_data()
-    
-    males = pd.DataFrame()
-    females = pd.DataFrame()
-    
-    if not df_all_ind.empty:
-        males = df_all_ind[df_all_ind['category'] == 'Operational Male'].sort_values(by="final_time_sec", ascending=True)
-        females = df_all_ind[df_all_ind['category'] == 'Operational Female'].sort_values(by="final_time_sec", ascending=True)
-    
-    col_sel_m, col_sel_f = st.columns(2)
-    
-    with col_sel_m:
-        st.markdown("##### 🟢 Guaranteed Male Selection (Top 4)")
-        if len(males) >= 4:
-            top_m = males.head(4).copy()
-            top_m["Time"] = top_m["final_time_sec"].apply(format_time)
-            # males/females keep their original row index from df_all_ind after
-            # the filter+sort above (pandas doesn't renumber on sort_values), so
-            # without this st.table shows those leftover index numbers in the
-            # first column instead of a clean 1-4 rank — same fix already
-            # applied to the two leaderboard tables above.
-            top_m.index = range(1, len(top_m) + 1)
-            st.table(top_m[["name", "age_group", "Time"]])
+    _published = ticket_is_published(df_all_ind)
+    if _published:
+        st.markdown("#### 🏆 Swansea 2027 Ticket Holders")
+        st.caption("Places are confirmed as competitors accept their offer, so this list can still change slightly "
+                   "until all 16 are confirmed.")
+        _held = df_all_ind[_ticket_status_series(df_all_ind).isin(TICKET_HELD)].copy()
+        _pc1, _pc2 = st.columns(2)
+        for _col, _cat, _title in ((_pc1, "Operational Male", "🟢 Men"), (_pc2, "Operational Female", "🔴 Women")):
+            with _col:
+                _sub = _held[_held['category'] == _cat].sort_values(by="final_time_sec", ascending=True).copy()
+                st.markdown(f"##### {_title} ({len(_sub)})")
+                if len(_sub):
+                    _sub["Time"] = _sub["final_time_sec"].apply(format_time)
+                    _t = _sub[["name", "age_group", "Time"]].rename(columns={"name": "Name", "age_group": "Age"})
+                    _t.index = [""] * len(_t)
+                    st.table(_t)
+                else:
+                    st.info("No places held yet.")
+        if len(_held) == TICKET_TOTAL:
+            st.success(f"✅ All {TICKET_TOTAL} places allocated.")
         else:
-            st.warning("Need at least 4 operational male runs to populate.")
+            st.info(f"{len(_held)} of {TICKET_TOTAL} places currently allocated.")
+    else:
+        males = pd.DataFrame()
+        females = pd.DataFrame()
+    
+        if not df_all_ind.empty:
+            males = df_all_ind[df_all_ind['category'] == 'Operational Male'].sort_values(by="final_time_sec", ascending=True)
+            females = df_all_ind[df_all_ind['category'] == 'Operational Female'].sort_values(by="final_time_sec", ascending=True)
+    
+        col_sel_m, col_sel_f = st.columns(2)
+    
+        with col_sel_m:
+            st.markdown("##### 🟢 Guaranteed Male Selection (Top 4)")
+            if len(males) >= 4:
+                top_m = males.head(4).copy()
+                top_m["Time"] = top_m["final_time_sec"].apply(format_time)
+                # males/females keep their original row index from df_all_ind after
+                # the filter+sort above (pandas doesn't renumber on sort_values), so
+                # without this st.table shows those leftover index numbers in the
+                # first column instead of a clean 1-4 rank — same fix already
+                # applied to the two leaderboard tables above.
+                top_m.index = range(1, len(top_m) + 1)
+                st.table(top_m[["name", "age_group", "Time"]])
+            else:
+                st.warning("Need at least 4 operational male runs to populate.")
             
-    with col_sel_f:
-        st.markdown("##### 🔴 Guaranteed Female Selection (Top 4)")
-        if len(females) >= 4:
-            top_f = females.head(4).copy()
-            top_f["Time"] = top_f["final_time_sec"].apply(format_time)
-            top_f.index = range(1, len(top_f) + 1)
-            st.table(top_f[["name", "age_group", "Time"]])
-        else:
-            st.warning("Need at least 4 operational female runs to populate.")
+        with col_sel_f:
+            st.markdown("##### 🔴 Guaranteed Female Selection (Top 4)")
+            if len(females) >= 4:
+                top_f = females.head(4).copy()
+                top_f["Time"] = top_f["final_time_sec"].apply(format_time)
+                top_f.index = range(1, len(top_f) + 1)
+                st.table(top_f[["name", "age_group", "Time"]])
+            else:
+                st.warning("Need at least 4 operational female runs to populate.")
             
-        # Proportional Allocation logic (4 male + 4 female remaining places)
-    st.markdown("#### 🎯 Proportional Remaining 8-Ticket Distribution")
-    all_ages = ['18-29', '30-34', '35-39', '40-44', '45-49', '50-54', '55+']
-    REMAINING_PER_GENDER = 4
+            # Proportional Allocation logic (4 male + 4 female remaining places)
+        st.markdown("#### 🎯 Proportional Remaining 8-Ticket Distribution")
+        all_ages = ['18-29', '30-34', '35-39', '40-44', '45-49', '50-54', '55+']
+        REMAINING_PER_GENDER = 4
 
-    if len(males) >= 4 and len(females) >= 4:
-        top_8 = pd.concat([males.head(4), females.head(4)])
-        guaranteed_names = set(top_8['name'])
-        top_8_ages = list(top_8['age_group'])
+        if len(males) >= 4 and len(females) >= 4:
+            top_8 = pd.concat([males.head(4), females.head(4)])
+            guaranteed_names = set(top_8['name'])
+            top_8_ages = list(top_8['age_group'])
 
-        st.write("<b>Age Brackets represented in Guaranteed Top 8:</b>", unsafe_allow_html=True)
-        cols = st.columns(len(all_ages))
-        for idx, age in enumerate(all_ages):
-            with cols[idx]:
-                st.metric(label=f"Bracket {age}", value=top_8_ages.count(age))
+            st.write("<b>Age Brackets represented in Guaranteed Top 8:</b>", unsafe_allow_html=True)
+            cols = st.columns(len(all_ages))
+            for idx, age in enumerate(all_ages):
+                with cols[idx]:
+                    st.metric(label=f"Bracket {age}", value=top_8_ages.count(age))
 
-        def _remaining_for(gender_df):
-            picked, quota = pick_remaining_tickets(gender_df, all_ages, REMAINING_PER_GENDER)
-            picked = picked.copy()
-            picked["Time"] = picked["final_time_sec"].apply(format_time)
-            picked.index = range(1, len(picked) + 1)
-            return picked, quota
+            def _remaining_for(gender_df):
+                picked, quota = pick_remaining_tickets(gender_df, all_ages, REMAINING_PER_GENDER)
+                picked = picked.copy()
+                picked["Time"] = picked["final_time_sec"].apply(format_time)
+                picked.index = range(1, len(picked) + 1)
+                return picked, quota
 
-        rem_m, quota_m = _remaining_for(males)
-        rem_f, quota_f = _remaining_for(females)
+            rem_m, quota_m = _remaining_for(males)
+            rem_f, quota_f = _remaining_for(females)
 
-        col_rm, col_rf = st.columns(2)
-        with col_rm:
-            st.markdown("##### 🟢 Remaining 4 Male Tickets")
-            st.caption("Quota by bracket: " + ", ".join(f"{a}: {quota_m[a]}" for a in all_ages if quota_m[a] > 0))
-            if len(rem_m) < REMAINING_PER_GENDER:
-                st.warning(f"Only {len(rem_m)} eligible male competitors available for these 4 tickets.")
-            if len(rem_m):
-                st.table(rem_m[["name", "age_group", "Time", "why"]].rename(columns={"why": "Why"}))
-        with col_rf:
-            st.markdown("##### 🔴 Remaining 4 Female Tickets")
-            st.caption("Quota by bracket: " + ", ".join(f"{a}: {quota_f[a]}" for a in all_ages if quota_f[a] > 0))
-            if len(rem_f) < REMAINING_PER_GENDER:
-                st.warning(f"Only {len(rem_f)} eligible female competitors available for these 4 tickets.")
-            if len(rem_f):
-                st.table(rem_f[["name", "age_group", "Time", "why"]].rename(columns={"why": "Why"}))
+            col_rm, col_rf = st.columns(2)
+            with col_rm:
+                st.markdown("##### 🟢 Remaining 4 Male Tickets")
+                st.caption("Quota by bracket: " + ", ".join(f"{a}: {quota_m[a]}" for a in all_ages if quota_m[a] > 0))
+                if len(rem_m) < REMAINING_PER_GENDER:
+                    st.warning(f"Only {len(rem_m)} eligible male competitors available for these 4 tickets.")
+                if len(rem_m):
+                    st.table(rem_m[["name", "age_group", "Time", "why"]].rename(columns={"why": "Why"}))
+            with col_rf:
+                st.markdown("##### 🔴 Remaining 4 Female Tickets")
+                st.caption("Quota by bracket: " + ", ".join(f"{a}: {quota_f[a]}" for a in all_ages if quota_f[a] > 0))
+                if len(rem_f) < REMAINING_PER_GENDER:
+                    st.warning(f"Only {len(rem_f)} eligible female competitors available for these 4 tickets.")
+                if len(rem_f):
+                    st.table(rem_f[["name", "age_group", "Time", "why"]].rename(columns={"why": "Why"}))
 
-        st.markdown("---")
-        st.write("<b>🏆 Full 16-Ticket Roster (Guaranteed 8 + Proportional 8):</b>", unsafe_allow_html=True)
-        full_roster = pd.concat([top_8, rem_m, rem_f]).sort_values(by="final_time_sec", ascending=True).copy()
-        full_roster["Time"] = full_roster["final_time_sec"].apply(format_time)
-        full_roster.index = range(1, len(full_roster) + 1)
-        st.table(full_roster[["name", "category", "age_group", "Time"]])
+            st.markdown("---")
+            st.write("<b>🏆 Full 16-Ticket Roster (Guaranteed 8 + Proportional 8):</b>", unsafe_allow_html=True)
+            full_roster = pd.concat([top_8, rem_m, rem_f]).sort_values(by="final_time_sec", ascending=True).copy()
+            full_roster["Time"] = full_roster["final_time_sec"].apply(format_time)
+            full_roster.index = range(1, len(full_roster) + 1)
+            st.table(full_roster[["name", "category", "age_group", "Time"]])
 
-        n_m = int((full_roster["category"] == "Operational Male").sum())
-        n_f = int((full_roster["category"] == "Operational Female").sum())
-        if n_m == 8 and n_f == 8:
-            st.success("✅ Roster check: 8 male + 8 female = 16 tickets.")
-        else:
-            st.warning(f"⚠️ Roster check: {n_m} male + {n_f} female. Not enough eligible competitors yet to fill 8 of each.")
+            n_m = int((full_roster["category"] == "Operational Male").sum())
+            n_f = int((full_roster["category"] == "Operational Female").sum())
+            if n_m == 8 and n_f == 8:
+                st.success("✅ Roster check: 8 male + 8 female = 16 tickets.")
+            else:
+                st.warning(f"⚠️ Roster check: {n_m} male + {n_f} female. Not enough eligible competitors yet to fill 8 of each.")
 def _check_admin_pw():
     """Runs when the password box is submitted: verify once, then wipe the box."""
     entered = st.session_state.get("admin_pw_input", "")
@@ -1388,25 +1672,9 @@ with tab_admin:
                  * *The app will automatically and instantly convert these into high-performance, real-time export links with ZERO sync delay!*
             2. **Create the Write Apps Script:**
                * In your Google Sheet, go to **Extensions > Apps Script**.
-               * Paste the following lightweight, secure code:
-                 ```javascript
-                 function doPost(e) {
-                   var action = e.parameter.action;
-                   var sheetName = (action === "add_individual") ? "individuals" : "relays";
-                   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
-                   if (!sheet) {
-                     return ContentService.createTextOutput("ERROR: Sheet not found");
-                   }
-                   var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-                   var nextId = sheet.getLastRow();
-                   var newRow = headers.map(function(h) {
-                     if (h === "id") return nextId;
-                     return e.parameter[h] || "";
-                   });
-                   sheet.appendRow(newRow);
-                   return ContentService.createTextOutput("SUCCESS");
-                 }
-                 ```
+               * Paste the script from the file `apps_script/Code.gs` in the project repository (it handles saving results and the ticket offers). Replace everything already in the editor.
+               * Your Google Sheet `individuals` tab also needs a `ticket_status` column header (used by the Ticket Offers Manager).
+               * When updating an existing script, use **Deploy > Manage deployments > (pencil) > Version: New version > Deploy** so the Web App URL stays the same.
                * Click **Deploy > New Deployment**. Choose **Web App**.
                * Set **Execute as:** *Me*, and **Who has access:** *Anyone*.
                * Copy the generated **Web App URL** and paste it into **Google Apps Script Web App URL** in the Cloud Backend Configuration section above.
@@ -1577,6 +1845,9 @@ with tab_admin:
                         st.session_state["_rel_flash"] = _done_msg
                         st.session_state["_clear_rel"] = True
                         st.rerun()
+
+        st.markdown("---")
+        ticket_manager_ui()
 
     else:
         st.info("Enter password '*******' in the field above to activate the marshal logger panel.")
