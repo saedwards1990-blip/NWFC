@@ -323,19 +323,9 @@ def get_gsheet_data_robust(url):
     except Exception as e:
         raise RuntimeError(f"CSV Parsing Failed: {e}")
 
-# Widget keys wiped after a successful log, so the marshal form returns to blank.
-IND_FORM_KEYS = ["ind_name", "ind_station", "ind_watch", "ind_cat", "ind_age",
-                 "ind_mins", "ind_secs", "ind_dnf"]
-REL_FORM_KEYS = ["rel_team", "rel_div", "rel_r1", "rel_r2", "rel_r3", "rel_r4",
-                 "rel_mins", "rel_secs", "rel_dnf"]
-
-
-def _clear_form(keys, prefix):
-    """Reset a marshal form. Must run BEFORE the widgets are created in a script run."""
-    for k in keys:
-        st.session_state.pop(k, None)
-    for pen in PENALTIES:
-        st.session_state.pop(f"{prefix}_{pen['code']}", None)
+# Marshal forms are reset by bumping a version number that is part of every widget key
+# (_ind_ver / _rel_ver). New keys = brand-new blank widgets. Deleting the old values from
+# session_state is NOT enough: the browser keeps showing the old text.
 
 
 # Data Access Layer
@@ -1386,34 +1376,35 @@ with tab_admin:
         if st.session_state.admin_mode == "individual":
             st.markdown("#### 🏃 Individual Competitor Entry Form")
             if st.session_state.pop("_clear_ind", False):
-                _clear_form(IND_FORM_KEYS, "ind")
+                st.session_state["_ind_ver"] = st.session_state.get("_ind_ver", 0) + 1
+            _ifv = st.session_state.get("_ind_ver", 0)
             _ind_msg = st.session_state.pop("_ind_flash", None)
             if _ind_msg:
                 st.success(_ind_msg)
             st.info("💡 Note: Keyboard shortcut 'Enter to submit' has been removed to prevent accidental entries. All fields start blank and the submit button unlocks automatically once all required fields are complete.")
             
-            name = st.text_input("Competitor Name:", value="", placeholder="Enter full name...", key="ind_name")
-            station = st.selectbox("Station:", STATIONS_LIST, index=None, placeholder="Select Station...", key="ind_station")
-            watch = st.selectbox("Watch / Dept / Sector:", WATCHES_LIST, index=None, placeholder="Select Watch / Dept...", key="ind_watch")
-            category = st.selectbox("Class Category:", ["Operational Male", "Operational Female", "Non-Operational"], index=None, placeholder="Select Class Category...", key="ind_cat")
-            age_group = st.selectbox("Age Bracket:", ['18-29', '30-34', '35-39', '40-44', '45-49', '50-54', '55+'], index=None, placeholder="Select Age Bracket...", key="ind_age")
+            name = st.text_input("Competitor Name:", value="", placeholder="Enter full name...", key=f"ind_name_{_ifv}")
+            station = st.selectbox("Station:", STATIONS_LIST, index=None, placeholder="Select Station...", key=f"ind_station_{_ifv}")
+            watch = st.selectbox("Watch / Dept / Sector:", WATCHES_LIST, index=None, placeholder="Select Watch / Dept...", key=f"ind_watch_{_ifv}")
+            category = st.selectbox("Class Category:", ["Operational Male", "Operational Female", "Non-Operational"], index=None, placeholder="Select Class Category...", key=f"ind_cat_{_ifv}")
+            age_group = st.selectbox("Age Bracket:", ['18-29', '30-34', '35-39', '40-44', '45-49', '50-54', '55+'], index=None, placeholder="Select Age Bracket...", key=f"ind_age_{_ifv}")
             
             st.markdown("##### ⏱️ Raw Stopwatch Time")
             col_m, col_s = st.columns(2)
             with col_m:
-                mins = st.number_input("Minutes:", min_value=0, max_value=10, value=0, step=1, key="ind_mins")
+                mins = st.number_input("Minutes:", min_value=0, max_value=10, value=0, step=1, key=f"ind_mins_{_ifv}")
             with col_s:
-                secs = st.number_input("Seconds (and ms):", min_value=0.0, max_value=59.999, value=0.0, step=1.0, format="%.3f", key="ind_secs")
+                secs = st.number_input("Seconds (and ms):", min_value=0.0, max_value=59.999, value=0.0, step=1.0, format="%.3f", key=f"ind_secs_{_ifv}")
             
             ind_dnf = st.checkbox("🚫 Did Not Finish (DNF) — tick this ONLY if the competitor did not complete "
-                                  "the course. Leave the time at 0:00.", key="ind_dnf")
+                                  "the course. Leave the time at 0:00.", key=f"ind_dnf_{_ifv}")
 
             st.markdown("##### ⚠️ Rule Violations & Penalties")
             penalties = 0
             for p in PENALTIES:
                 if p["relay_only"]:
                     continue
-                if st.checkbox(f"{p['desc']} ({p['label']})", key=f"ind_{p['code']}"):
+                if st.checkbox(f"{p['desc']} ({p['label']})", key=f"ind_{p['code']}_{_ifv}"):
                     penalties += p["pts"]
             if ind_dnf:
                 penalties = 0  # penalties are meaningless on a DNF
@@ -1457,35 +1448,36 @@ with tab_admin:
         else:
             st.markdown("#### 👥 Relay Team Entry Form")
             if st.session_state.pop("_clear_rel", False):
-                _clear_form(REL_FORM_KEYS, "rel")
+                st.session_state["_rel_ver"] = st.session_state.get("_rel_ver", 0) + 1
+            _rfv = st.session_state.get("_rel_ver", 0)
             _rel_msg = st.session_state.pop("_rel_flash", None)
             if _rel_msg:
                 st.success(_rel_msg)
             st.info("💡 Note: Keyboard shortcut 'Enter to submit' has been removed to prevent accidental entries. All fields start blank and the submit button unlocks automatically once all required fields are complete.")
             
-            relay_team_name = st.text_input("Relay Team Name:", value="", placeholder="Enter team name...", key="rel_team")
-            division = st.selectbox("Relay Division:", ["Male", "Female", "Mixed"], index=None, placeholder="Select Relay Division...", key="rel_div")
+            relay_team_name = st.text_input("Relay Team Name:", value="", placeholder="Enter team name...", key=f"rel_team_{_rfv}")
+            division = st.selectbox("Relay Division:", ["Male", "Female", "Mixed"], index=None, placeholder="Select Relay Division...", key=f"rel_div_{_rfv}")
             
             st.markdown("##### 🏃 Running Order (4-Person Team)")
-            r1 = st.text_input("Runner 1 (Shuttle & RTC):", value="", placeholder="Runner 1 full name...", key="rel_r1")
-            r2 = st.text_input("Runner 2 (Force & Drag):", value="", placeholder="Runner 2 full name...", key="rel_r2")
-            r3 = st.text_input("Runner 3 (Makeup & Foam):", value="", placeholder="Runner 3 full name...", key="rel_r3")
-            r4 = st.text_input("Runner 4 (Dummy Rescue):", value="", placeholder="Runner 4 full name...", key="rel_r4")
+            r1 = st.text_input("Runner 1 (Shuttle & RTC):", value="", placeholder="Runner 1 full name...", key=f"rel_r1_{_rfv}")
+            r2 = st.text_input("Runner 2 (Force & Drag):", value="", placeholder="Runner 2 full name...", key=f"rel_r2_{_rfv}")
+            r3 = st.text_input("Runner 3 (Makeup & Foam):", value="", placeholder="Runner 3 full name...", key=f"rel_r3_{_rfv}")
+            r4 = st.text_input("Runner 4 (Dummy Rescue):", value="", placeholder="Runner 4 full name...", key=f"rel_r4_{_rfv}")
             
             st.markdown("##### ⏱️ Raw Relay Stopwatch Time")
             col_m, col_s = st.columns(2)
             with col_m:
-                mins = st.number_input("Relay Minutes:", min_value=0, max_value=10, value=0, step=1, key="rel_mins")
+                mins = st.number_input("Relay Minutes:", min_value=0, max_value=10, value=0, step=1, key=f"rel_mins_{_rfv}")
             with col_s:
-                secs = st.number_input("Relay Seconds (and ms):", min_value=0.0, max_value=59.999, value=0.0, step=1.0, format="%.3f", key="rel_secs")
+                secs = st.number_input("Relay Seconds (and ms):", min_value=0.0, max_value=59.999, value=0.0, step=1.0, format="%.3f", key=f"rel_secs_{_rfv}")
             
             rel_dnf = st.checkbox("🚫 Did Not Finish (DNF) — tick this ONLY if the team did not complete "
-                                  "the course. Leave the time at 0:00.", key="rel_dnf")
+                                  "the course. Leave the time at 0:00.", key=f"rel_dnf_{_rfv}")
 
             st.markdown("##### ⚠️ Rule Violations & Penalties")
             penalties = 0
             for p in PENALTIES:
-                if st.checkbox(f"{p['desc']} ({p['label']})", key=f"rel_{p['code']}"):
+                if st.checkbox(f"{p['desc']} ({p['label']})", key=f"rel_{p['code']}_{_rfv}"):
                     penalties += p["pts"]
             if rel_dnf:
                 penalties = 0  # penalties are meaningless on a DNF
