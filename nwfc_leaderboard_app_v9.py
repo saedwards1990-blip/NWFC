@@ -1298,12 +1298,18 @@ with tab_leaderboard:
         filt_c1, filt_c2 = st.columns(2)
         with filt_c1:
             category_filter = st.selectbox("Filter Individual Class:", [
-                "All Operational Staff", "Operational Male Only", "Operational Female Only", "Non-Operational"
+                "All Operational Staff", "Operational Male Only", "Operational Female Only", "Non-Operational",
+                "All Competitors (incl. Non-Operational)"
             ])
         with filt_c2:
             age_filter = st.selectbox("Filter Age Category:", [
                 "All Age Groups", "18-29", "30-34", "35-39", "40-44", "45-49", "50-54", "55+"
             ])
+        filt_c3, filt_c4 = st.columns(2)
+        with filt_c3:
+            station_filter = st.selectbox("Filter by Station:", ["All Stations"] + list(STATIONS_LIST))
+        with filt_c4:
+            watch_filter = st.selectbox("Filter by Watch / Dept:", ["All Watches"] + list(WATCHES_LIST))
 
         df_ind = get_individuals_data(include_dnf=True)
 
@@ -1314,11 +1320,19 @@ with tab_leaderboard:
                 df_filtered = df_ind[df_ind['category'] == 'Operational Male'].copy()
             elif category_filter == "Operational Female Only":
                 df_filtered = df_ind[df_ind['category'] == 'Operational Female'].copy()
-            else:
+            elif category_filter == "Non-Operational":
                 df_filtered = df_ind[df_ind['category'] == 'Non-Operational'].copy()
+            else:
+                df_filtered = df_ind.copy()
 
             if age_filter != "All Age Groups":
                 df_filtered = df_filtered[df_filtered['age_group'] == age_filter].copy()
+            if station_filter != "All Stations":
+                df_filtered = df_filtered[df_filtered['station'].astype(str).str.strip().str.lower()
+                                          == station_filter.strip().lower()].copy()
+            if watch_filter != "All Watches":
+                df_filtered = df_filtered[df_filtered['watch'].astype(str).str.strip().str.lower()
+                                          == watch_filter.strip().lower()].copy()
 
             if not df_filtered.empty:
                 # Finishers ranked by time; DNFs listed after them, unranked.
@@ -1341,7 +1355,8 @@ with tab_leaderboard:
                 _tbl.index = [""] * len(_tbl)  # blank index so numbers are not doubled
                 st.table(_tbl)
             else:
-                st.info("No runs recorded in this filtered category yet.")
+                st.info("No runs recorded for this combination of filters yet. If you are filtering by station "
+                        "or watch, try 'All Competitors (incl. Non-Operational)' in the class filter.")
         else:
             st.info("No runs recorded in this category yet.")
 
