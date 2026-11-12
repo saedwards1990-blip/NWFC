@@ -962,11 +962,13 @@ FULL_COURSE_VIDEO_URL = "https://youtu.be/8e4w8Q7ivGY"
 
 # --- Welsh Firefighter Challenge comparison (June 2027) --------------------------------------
 # The Welsh course is longer (46m vs 35m, roughly 65-75m more running/carrying overall) and has a
-# 6:00 time cap for everyone. The two conversion methods below are ESTIMATES, based on one
-# experienced competitor who ran both courses (about +40s). Edit them here if better data arrives.
+# 6:00 time cap for everyone. The conversion below is an ESTIMATE, based on three competitors who have
+# run both courses (North time -> Welsh time): 2:22.21 -> 2:38 (x1.11), 3:27.75 -> 3:09 (x0.91) and
+# 3:21.90 -> about 4:30 (x1.34). Welsh time is estimated as North time x LOW to North time x HIGH.
+# Edit these two numbers here if more Welsh results arrive.
 WELSH_CAP_SEC = 360        # 6:00, same for every age and gender
-WELSH_ADD_SEC = 40         # method 1: add a flat 40 seconds
-WELSH_RATIO = 1.34         # method 2: multiply by 1.34 (slower competitors lose more time)
+WELSH_RATIO_LOW = 0.91     # best case seen (Welsh time as a multiple of North time)
+WELSH_RATIO_HIGH = 1.34    # slowest case seen
 
 
 def _mmss(sec):
@@ -1445,8 +1447,8 @@ with tab_selection:
     with st.expander("🧮 Welsh course time estimator", expanded=False):
         st.caption(
             "Enter your time from this event. The Welsh course adds roughly 65-75m of running and carrying, so "
-            "your time will be slower there. Two estimates are shown because the extra distance costs slower "
-            "competitors more time. These are guides only, based on one experienced competitor who has run both courses."
+            "your time will usually be slower there. The range is based on three competitors who have run "
+            "both courses, so it is a ballpark guide only."
         )
         _ec1, _ec2 = st.columns(2)
         with _ec1:
@@ -1456,7 +1458,7 @@ with tab_selection:
                                   format="%.3f", key="est_secs")
         _et = _em * 60 + _es
         if _et > 0:
-            _a, _b = _et + WELSH_ADD_SEC, _et * WELSH_RATIO
+            _a, _b = _et * WELSH_RATIO_LOW, _et * WELSH_RATIO_HIGH
             _lo, _hi = min(_a, _b), max(_a, _b)
             st.markdown(f"**Estimated Welsh time: {_mmss(_lo)} to {_mmss(_hi)}**  (cap is {_mmss(WELSH_CAP_SEC)})")
             if _hi <= WELSH_CAP_SEC:
@@ -1467,7 +1469,7 @@ with tab_selection:
             else:
                 st.error("❗ Likely to be timed out at the 6:00 cap as things stand. You have until June 2027 "
                          "to improve, and you are still very welcome to come and experience it.")
-            st.caption(f"To be comfortably inside the cap, aim for about {_mmss(WELSH_CAP_SEC / WELSH_RATIO)} "
+            st.caption(f"To be comfortably inside the cap, aim for about {_mmss(WELSH_CAP_SEC / WELSH_RATIO_HIGH)} "
                        f"or faster on our course.")
         else:
             st.caption("Enter a time above to see your estimate.")
